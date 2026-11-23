@@ -163,8 +163,17 @@ function applyTerrain() {
 }
 function updateNoMapHint() {
   if (!state.engineOk) return;
-  const any = Object.keys(state.maps).length || state.areas.length;
-  $('noMap').hidden = !!any || tiles.isOnline();
+  const hasStreetMap = Object.values(state.maps).some((m) => m.kind === 'vector');
+  $('noMap').hidden = hasStreetMap;
+  if (hasStreetMap) return;
+  const online = navigator.onLine !== false;
+  $('noMapText').innerHTML = state.update.busy
+    ? 'Downloading the offline maps of Saudi Arabia (about 1.3 GB). Keep Rimal open — you can drive meanwhile.'
+    : online
+      ? 'This screen has internet: download the offline maps of Saudi Arabia now (about 1.3 GB, once). After that Rimal works with no internet at all.'
+      : '<b>No internet on this screen.</b> Connect it once to Wi-Fi or your phone’s hotspot, then tap Download — or copy the map files from the GitHub Releases page to a USB stick and import them. GPS, trips and navigation already work.';
+  $('noMapDl').disabled = !!state.update.busy;
+  $('noMapProg').textContent = state.update.msg || state.update.lastError || '';
 }
 
 const src = (id) => map.getSource(id);
@@ -280,12 +289,12 @@ function installedVersions() {
   return v;
 }
 const fmtVer = (v) => (v && v !== '00000000' ? `${v.slice(6, 8)}/${v.slice(4, 6)}/${v.slice(0, 4)}` : 'imported');
-function setUpdateMsg(m) { state.update.msg = m; const el = $('updState'); el.textContent = m; el.hidden = !m; }
+function setUpdateMsg(m) { state.update.msg = m; const el = $('updState'); el.textContent = m; el.hidden = !m; updateNoMapHint(); }
 
 /* =========================================================
    GPS, dashboard, sensors
    ========================================================= */
-const gps = new GPS(onFix, (msg) => { noteGpsError(msg); setGpsPill(msg.includes('denied') ? 'NO PERMISSION' : 'NO GPS', ''); if (msg.includes('denied')) toast(msg); });
+const gps = new GPS(onFix, (msg) => { noteGpsError(msg); if (state.fix && !msg.includes('denied')) return; setGpsPill(msg.includes('denied') ? 'NO PERMISSION' : msg.includes('Waiting') ? 'SEARCHING GPS' : 'NO GPS', msg.includes('Waiting') ? 'weak' : ''); if (msg.includes('denied')) toast('Location permission denied — allow it in Android Settings → Apps → Rimal → Permissions', 8000); });
 const attitude = new Attitude(onAttitude);
 let staleTimer, lastGroundAt = 0, lastOdo = null;
 
@@ -1137,7 +1146,8 @@ async function importMapFile([file]) {
 
 /* ---------- Tools ---------- */
 function toolsSheet() {
-  openSheet('Tools', `<div class="toolgrid">
+  openSheet('Settings & tools', `<div class="toolgrid">
+    <button data-a="settings"><i>⚙</i>Settings</button>
     <button data-a="plan"><i>⇢</i>Route planner</button>
     <button data-a="measure"><i>📏</i>Measure</button>
     <button data-a="tilt"><i>⛰</i>Pitch &amp; roll</button>
@@ -1145,7 +1155,6 @@ function toolsSheet() {
     <button data-a="fuel"><i>⛽</i>Fuel range</button>
     <button data-a="sun"><i>☀</i>Sun &amp; time</button>
     <button data-a="sos" class="sos"><i>SOS</i>Emergency</button>
-    <button data-a="settings"><i>⚙</i>Settings</button>
     <button data-a="backup"><i>💾</i>Backup</button>
     <button data-a="report"><i>🧪</i>Test report</button>
   </div>`, {
@@ -1323,6 +1332,7 @@ async function boot() {
   $('bMaps').onclick = () => mapsSheet();
   $('bTools').onclick = toolsSheet;
   $('noMapBtn').onclick = () => { mapsTab = 'updates'; mapsSheet(); };
+  $('noMapDl').onclick = () => { if (S.autoUpdate === 'off' || S.autoUpdate === 'wifi') setS('autoUpdate', 'any'); checkUpdates(true); };
   $('navStop').onclick = stopNav;
   $('planUndo').onclick = () => { state.plan?.points.pop(); refreshPlan(); renderPlanBar(); };
   $('planSave').onclick = savePlan;
