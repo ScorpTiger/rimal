@@ -6,6 +6,7 @@
 // the previous one is still there and is used automatically.
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
+import { FileTransfer } from '@capacitor/file-transfer';
 import * as store from './storage.js';
 
 export const KINDS = { map: 'Street & track map', terrain: 'Terrain (3D, hillshade, contours)', satellite: 'Satellite imagery', poi: 'Places & POIs (search)' };
@@ -53,15 +54,19 @@ export async function download(item, token, onProgress, signal) {
   let stream;
   let cleanup = async () => {};
   if (Capacitor.isNativePlatform()) {
-    // Native download (no CORS, survives the WebView being busy), then stream it into app storage.
+    // Native streaming download to app cache (no CORS, follows GitHub's redirect), then copy into app storage.
     const path = `dl/${file}`;
-    const h = await Filesystem.addListener('progress', (p) => onProgress?.(0.9 * (p.bytes / (p.contentLength || item.size || 1)), p.bytes));
+    await Filesystem.mkdir({ path: 'dl', directory: Directory.Cache, recursive: true }).catch(() => {});
+    await Filesystem.deleteFile({ path, directory: Directory.Cache }).catch(() => {});
+    const { uri } = await Filesystem.getUri({ path, directory: Directory.Cache });
+    const h = await FileTransfer.addListener('progress', (p) => onProgress?.(0.9 * (p.bytes / (p.contentLength || item.size || 1)), p.bytes));
     try {
-      const res = await Filesystem.downloadFile({ url: item.url, path, directory: Directory.Cache, progress: true, recursive: true, headers: headers(token, true) });
-      const uri = Capacitor.convertFileSrc(res.path || (await Filesystem.getUri({ path, directory: Directory.Cache })).uri);
-      stream = (await fetch(uri)).body;
-      cleanup = () => Filesystem.deleteFile({ path, directory: Directory.Cache }).catch(() => {});
-    } finally { h.remove(); }
+      await FileTransfer.downloadFile({ url: item.url, path: uri, progress: true, headers: headers(token, true), connectTimeout: 30000, readTimeout: 120000 });
+    } finally { await h.remove(); }
+    const res = await fetch(Capacitor.convertFileSrc(uri));
+    if (!res.ok || !res.body) throw new Error('could not read the downloaded file');
+    stream = res.body;
+    cleanup = () => Filesystem.deleteFile({ path, directory: Directory.Cache }).catch(() => {});
   } else {
     const r = await fetch(item.url, { headers: token ? headers(token, true) : {}, signal });
     if (!r.ok) throw new Error(`Download failed (${r.status})`);

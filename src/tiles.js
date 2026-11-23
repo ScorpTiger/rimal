@@ -113,6 +113,18 @@ export async function netFetch(url, signal, timeout = 15000) {
   } finally { clearTimeout(t); }
 }
 
+/** JSON over HTTP; native HTTP on Android (it returns JSON already parsed). */
+export async function netJSON(url, timeout = 15000) {
+  if (Capacitor.isNativePlatform()) {
+    const r = await CapacitorHttp.get({ url, responseType: 'json', connectTimeout: timeout, readTimeout: timeout });
+    if (r.status !== 200) throw new Error('HTTP ' + r.status);
+    return typeof r.data === 'string' ? JSON.parse(r.data) : r.data;
+  }
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
 /* ---------------- lookup chain ---------------- */
 async function fromPacks(layer, z, x, y) {
   for (const p of packs[layer]) {

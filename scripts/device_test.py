@@ -174,11 +174,12 @@ if True:
 
     @step('Map pack update: full download + install of all packs (~1.3 GB, native download → app storage)')
     def _():
-        ev("__rimal.setS('autoUpdate','any'); __rimal.checkUpdates(true)")
-        last = ''; end = time.time() + 45 * 60
+        ev("__rimal.setS('autoUpdate','any'); window.__upd = __rimal.checkUpdates(true).then(()=>'done', e=>'error '+e)")
+        time.sleep(5)
+        last = ''; end = time.time() + 50 * 60
         while time.time() < end:
             time.sleep(15)
-            st = ev("({busy: __rimal.state.update.busy, msg: __rimal.state.update.msg, maps: Object.values(__rimal.state.maps).map(m=>m.name+':'+m.kind), poi: __rimal.state.poiVersion})")
+            st = ev("({busy: __rimal.state.update.busy, msg: __rimal.state.update.msg, err: __rimal.state.update.lastError || '', toast: document.getElementById('toast').textContent, maps: Object.values(__rimal.state.maps).map(m=>m.name+':'+m.kind), poi: __rimal.state.poiVersion})")
             if st['msg'] != last: print('   ', st['msg'], flush=True); last = st['msg']
             if not st['busy']: break
         shot('after-update')

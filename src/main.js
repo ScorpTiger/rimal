@@ -256,6 +256,8 @@ async function checkUpdates(manual = false) {
         changed = true;
         toast(`${label} updated to ${fmtVer(item.version)} — previous version kept as backup`, 5000);
       } catch (e) {
+        console.warn('Update failed', item.kind, e?.message || e);
+        state.update.lastError = `${item.kind}: ${e?.message || e}`;
         toast(`${label} update failed (${e.message}). Your current version is still in use.`, 6000);
       }
     }
@@ -264,6 +266,8 @@ async function checkUpdates(manual = false) {
       await loadMaps(); applyStyle();
     }
   } catch (e) {
+    console.warn('Update check failed', e?.message || e);
+    state.update.lastError = String(e?.message || e);
     if (manual) toast(`Update check failed: ${e.message}`, 6000);
   } finally { state.update.busy = false; setUpdateMsg(''); if (!$('sheet').hidden && $('sheetTitle').textContent === 'Maps & layers') mapsSheet(); }
 }

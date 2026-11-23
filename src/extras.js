@@ -2,7 +2,7 @@
 import * as SunCalc from 'suncalc';
 import { distance } from './geo.js';
 import * as store from './storage.js';
-import { netFetch, isOnline } from './tiles.js';
+import { netJSON, isOnline } from './tiles.js';
 
 export function sunTimes(lon, lat, date = new Date()) {
   const t = SunCalc.getTimes(date, lat, lon);
@@ -18,8 +18,7 @@ export async function weather(lon, lat, force = false) {
   if (!isOnline()) return cached || null;
   try {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}&current=temperature_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,weather_code,visibility&hourly=temperature_2m,wind_gusts_10m,precipitation_probability&daily=temperature_2m_max,temperature_2m_min,wind_gusts_10m_max,precipitation_sum&forecast_days=4&timezone=auto`;
-    const bytes = await netFetch(url, null, 12000);
-    const data = JSON.parse(new TextDecoder().decode(bytes));
+    const data = await netJSON(url, 12000);
     const out = { at: Date.now(), at_pos: [lon, lat], data };
     await store.put('kv', out, 'weather');
     return out;
