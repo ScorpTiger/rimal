@@ -115,6 +115,48 @@ export const liveClear = () => clear('live');
 const hasOPFS = () => !!(navigator.storage && navigator.storage.getDirectory);
 const sessionFiles = new Map(); // fallback when OPFS is unavailable
 
+// Large-file writer. Prefers the worker (works on Android WebView); falls back to createWritable.
+let worker, wseq = 0;
+const pendingW = new Map();
+function opfsWorker() {
+  if (!worker) {
+    worker = new Worker(new URL('./opfs-worker.js', import.meta.url), { type: 'module' });
+    worker.onmessage = (e) => { const p = pendingW.get(e.data.id); if (!p) return; pendingW.delete(e.data.id); e.data.ok ? p.res(e.data) : p.rej(new Error(e.data.error)); };
+  }
+  return worker;
+}
+function wcall(op, data, transfer) {
+  return new Promise((res, rej) => { const id = ++wseq; pendingW.set(id, { res, rej }); opfsWorker().postMessage({ id, op, data }, transfer || []); });
+}
+/** Returns { write(Uint8Array), close() -> size, abort() } writing maps/<name> */
+async function openWriter(name) {
+  try {
+    await wcall('open', { name });
+    let at = 0;
+    return {
+      async write(chunk) { const copy = chunk.slice().buffer; await wcall('write', { buf: copy, at }, [copy]); at += chunk.byteLength; },
+      async close() { return (await wcall('close')).size; },
+      abort: () => wcall('abort').catch(() => {}),
+      rename: (from, to) => wcall('rename', { from, to }),
+    };
+  } catch (workerErr) {
+    const dir = await mapsDir();
+    const fh = await dir.getFileHandle(name, { create: true });
+    const w = await fh.createWritable();
+    let size = 0;
+    return {
+      async write(chunk) { await w.write(chunk); size += chunk.byteLength; },
+      async close() { await w.close(); return size; },
+      async abort() { try { await w.abort(); } catch { /* ignore */ } await dir.removeEntry(name).catch(() => {}); },
+      async rename(from, to) {
+        const f = await (await dir.getFileHandle(from)).getFile();
+        const out = await (await dir.getFileHandle(to, { create: true })).createWritable();
+        await out.write(f); await out.close(); await dir.removeEntry(from);
+      },
+    };
+  }
+}
+
 async function mapsDir() {
   const root = await navigator.storage.getDirectory();
   return root.getDirectoryHandle('maps', { create: true });
@@ -127,21 +169,19 @@ export async function importMapFile(file, onProgress) {
     return { name, persisted: false };
   }
   try { await navigator.storage.persist?.(); } catch { /* ignore */ }
-  const dir = await mapsDir();
-  const fh = await dir.getFileHandle(name, { create: true });
-  const w = await fh.createWritable();
   const CHUNK = 8 * 1024 * 1024;
+  let w;
   try {
+    w = await openWriter(name);
     for (let off = 0; off < file.size; off += CHUNK) {
-      const buf = await file.slice(off, off + CHUNK).arrayBuffer();
-      await w.write(buf);
+      await w.write(new Uint8Array(await file.slice(off, off + CHUNK).arrayBuffer()));
       onProgress?.(Math.min(1, (off + CHUNK) / file.size));
     }
     await w.close();
   } catch (e) {
-    try { await w.abort(); } catch { /* ignore */ }
-    await dir.removeEntry(name).catch(() => {});
-    // Not enough space or OPFS write failed — use the picked file for this session only.
+    console.warn('Map import to app storage failed', e?.message || e);
+    await w?.abort();
+    // Not enough space or storage refused — use the picked file for this session only.
     sessionFiles.set(name, file);
     return { name, persisted: false, error: e };
   }
@@ -162,10 +202,8 @@ export async function getMapFile(name) {
 
 /** Stream a download into OPFS without holding it in memory. */
 export async function writeStreamToOPFS(name, stream, total, onProgress) {
-  const dir = await mapsDir();
   const tmp = name + '.part';
-  const fh = await dir.getFileHandle(tmp, { create: true });
-  const w = await fh.createWritable();
+  const w = await openWriter(tmp);
   let got = 0;
   try {
     const reader = stream.getReader();
@@ -177,20 +215,11 @@ export async function writeStreamToOPFS(name, stream, total, onProgress) {
       onProgress?.(total ? got / total : 0, got);
     }
     await w.close();
-  } catch (e) {
-    try { await w.abort(); } catch { /* ignore */ }
-    await dir.removeEntry(tmp).catch(() => {});
-    throw e;
-  }
-  if (total && got !== total) { await dir.removeEntry(tmp).catch(() => {}); throw new Error(`Download incomplete (${got} of ${total} bytes)`); }
-  // Rename .part → final (OPFS has move() on newer engines; fall back to copy).
-  const part = await dir.getFileHandle(tmp);
-  if (part.move) { await part.move(name); }
-  else {
-    const f = await part.getFile();
-    const out = await (await dir.getFileHandle(name, { create: true })).createWritable();
-    await out.write(f); await out.close(); await dir.removeEntry(tmp);
-  }
+  } catch (e) { await w.abort(); throw e; }
+  if (total && got !== total) { const d = await mapsDir(); await d.removeEntry(tmp).catch(() => {}); throw new Error(`Download incomplete (${got} of ${total} bytes)`); }
+  const d = await mapsDir();
+  await d.removeEntry(name).catch(() => {});
+  await w.rename(tmp, name);
   return got;
 }
 
