@@ -5,7 +5,8 @@ Runs on the CI host while the emulator is up. Drives the app through Chrome DevT
 and writes results + screenshots to ./results.
 """
 import json, os, re, subprocess, sys, threading, time, traceback
-from playwright.sync_api import sync_playwright
+import urllib.request
+import websocket  # pip install websocket-client
 
 OUT = 'results'; os.makedirs(OUT, exist_ok=True)
 PKG = 'com.rimal.offroad'
@@ -60,22 +61,57 @@ adb('shell', 'monkey', '-p', PKG, '-c', 'android.intent.category.LAUNCHER', '1')
 time.sleep(12)
 shot('launch')
 
-# ---------- connect to the WebView ----------
-sock = None
-for _ in range(30):
-    m = re.search(r'@(webview_devtools_remote_\d+)', adb('shell', 'cat', '/proc/net/unix'))
-    if m: sock = m.group(1); break
-    time.sleep(2)
-if not sock:
-    record('WebView debuggable', False, 'no devtools socket'); sys.exit(1)
-adb('forward', 'tcp:9222', f'localabstract:{sock}')
+# ---------- minimal Chrome DevTools Protocol client (Android WebView) ----------
+class Page:
+    def __init__(self, port):
+        targets = json.load(urllib.request.urlopen(f'http://127.0.0.1:{port}/json'))
+        t = next(t for t in targets if t.get('type') == 'page' and 'localhost' in t.get('url', ''))
+        self.ws = websocket.create_connection(t['webSocketDebuggerUrl'], timeout=600, suppress_origin=True)
+        self.n = 0; self.console = []
+        self.send('Runtime.enable')
+    def send(self, method, **params):
+        self.n += 1; mid = self.n
+        self.ws.send(json.dumps({'id': mid, 'method': method, 'params': params}))
+        while True:
+            m = json.loads(self.ws.recv())
+            if m.get('method') == 'Runtime.exceptionThrown':
+                self.console.append('EXCEPTION ' + json.dumps(m['params']['exceptionDetails'])[:300])
+            elif m.get('method') == 'Runtime.consoleAPICalled' and m['params']['type'] in ('error', 'warning'):
+                self.console.append(m['params']['type'] + ': ' + ' '.join(str(a.get('value', a.get('description', ''))) for a in m['params']['args'])[:300])
+            if m.get('id') == mid:
+                if 'error' in m: raise RuntimeError(m['error'])
+                return m['result']
+    def evaluate(self, js):
+        expr = js.strip()
+        r = self.send('Runtime.evaluate', expression=f'({expr})', awaitPromise=True, returnByValue=True, timeout=600000)
+        if 'exceptionDetails' in r:
+            raise RuntimeError(r['exceptionDetails'].get('exception', {}).get('description', str(r['exceptionDetails']))[:500])
+        return r['result'].get('value')
+    def click(self, sel):
+        if not self.evaluate(f"(()=>{{const e=document.querySelector({json.dumps(sel)}); if(!e) return false; e.click(); return true;}})()"):
+            raise RuntimeError('element not found: ' + sel)
+        time.sleep(0.6)
+    def fill(self, sel, val):
+        if not self.evaluate(f"(()=>{{const e=document.querySelector({json.dumps(sel)}); if(!e) return false; e.value={json.dumps(val)}; e.dispatchEvent(new Event('input')); return true;}})()"):
+            raise RuntimeError('element not found: ' + sel)
 
-with sync_playwright() as p:
-    browser = p.chromium.connect_over_cdp('http://127.0.0.1:9222')
-    page = next(pg for c in browser.contexts for pg in c.pages if 'localhost' in pg.url)
-    console = []
-    page.on('console', lambda m: console.append(f'{m.type}: {m.text}'[:300]) if m.type in ('error', 'warning') else None)
-    page.on('pageerror', lambda e: console.append(f'PAGEERROR {e}'[:300]))
+def connect(port):
+    m = None
+    for _ in range(40):
+        m = re.search(r'@(webview_devtools_remote_\d+)', adb('shell', 'cat', '/proc/net/unix'))
+        if m: break
+        time.sleep(2)
+    if not m: raise RuntimeError('no WebView devtools socket')
+    adb('forward', f'tcp:{port}', f'localabstract:{m.group(1)}')
+    for _ in range(20):
+        try: return Page(port)
+        except Exception: time.sleep(2)
+    return Page(port)
+
+# ---------- connect to the WebView ----------
+if True:
+    page = connect(9222)
+    console = page.console
     ev = page.evaluate
     def wait_for(js, timeout=60, every=1.0):
         end = time.time() + timeout
@@ -193,16 +229,7 @@ with sync_playwright() as p:
 
     # reconnect to the new WebView process after the restart
     adb('forward', '--remove-all')
-    m = None
-    for _ in range(30):
-        m = re.search(r'@(webview_devtools_remote_\d+)', adb('shell', 'cat', '/proc/net/unix'))
-        if m: break
-        time.sleep(2)
-    adb('forward', 'tcp:9223', f'localabstract:{m.group(1)}')
-    b2 = p.chromium.connect_over_cdp('http://127.0.0.1:9223')
-    page = next(pg for c in b2.contexts for pg in c.pages if 'localhost' in pg.url)
-    page.on('pageerror', lambda e: console.append(f'PAGEERROR {e}'[:300]))
-    ev = page.evaluate
+    page = connect(9223); ev = page.evaluate
     wait_for('!!window.__rimal && Object.keys(__rimal.state.maps).length', 60)
 
     @step('OFFLINE: downloaded area shows full detail, rest of KSA from packs')
@@ -229,7 +256,7 @@ with sync_playwright() as p:
         return (True, {'fps_during_pan': ms, 'total_pss_kb': total and total.group(1)})
 
     adb('shell', 'cmd', 'connectivity', 'airplane-mode', 'disable'); adb('shell', 'svc', 'wifi', 'enable'); adb('shell', 'svc', 'data', 'enable')
-    open(f'{OUT}/console.txt', 'w').write('\n'.join(console))
+    open(f'{OUT}/console.txt', 'w').write('\n'.join(console + page.console))
 
 gps_on['run'] = False
 open(f'{OUT}/logcat.txt', 'w').write(adb('logcat', '-d', '-t', '4000', timeout=60))

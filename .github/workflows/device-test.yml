@@ -34,7 +34,7 @@ jobs:
         with: { python-version: "3.12" }
 
       - name: Test tools
-        run: pip install playwright
+        run: pip install websocket-client
 
       - name: Enable KVM
         run: |
