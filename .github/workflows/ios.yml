@@ -1,0 +1,80 @@
+name: Build iPad app (iOS)
+
+# Builds the iOS/iPadOS app on a Mac in the cloud:
+#  1. a simulator build that is launched on an iPad simulator (with a GPS position) and screenshotted
+#  2. an unsigned device build (Rimal-iPad-unsigned.ipa), published on the "ios-latest" release,
+#     ready to be signed with your own Apple ID (Sideloadly / AltStore) or Apple Developer account.
+on:
+  push:
+    branches: [main]
+    paths: ['src/**', 'ios/**', 'public/**', 'index.html', 'package*.json', 'capacitor.config.json', '.github/workflows/ios.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  ios:
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+
+      - name: Build web app and sync into iOS project
+        env:
+          VITE_UPDATE_REPO: ${{ github.repository }}
+        run: |
+          npm ci && npm run build && npx cap sync ios
+          xcodebuild -version
+
+      - name: Build for iPad simulator
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator \
+            -derivedDataPath build/sim CODE_SIGNING_ALLOWED=NO build | tail -25
+
+      - name: Run on iPad simulator
+        run: |
+          mkdir -p results
+          UDID=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; ip=[x for r,l in d.items() if 'iOS' in r for x in l if x['name'].startswith('iPad')]; ip.sort(key=lambda x: ('Pro' not in x['name'], x['name'])); print(ip[0]['udid']); print(ip[0]['name'], file=sys.stderr)")
+          echo "UDID=$UDID"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          APP=build/sim/Build/Products/Debug-iphonesimulator/App.app
+          xcrun simctl install "$UDID" "$APP"
+          xcrun simctl privacy "$UDID" grant location com.rimal.offroad || true
+          xcrun simctl privacy "$UDID" grant motion com.rimal.offroad || true
+          xcrun simctl location "$UDID" set 24.58,46.86 || true
+          (xcrun simctl launch --console-pty "$UDID" com.rimal.offroad > results/app-console.txt 2>&1 &)
+          sleep 30; xcrun simctl io "$UDID" screenshot results/01-ipad-launch.png
+          xcrun simctl location "$UDID" set 24.585,46.87 || true
+          sleep 40; xcrun simctl io "$UDID" screenshot results/02-ipad-after-60s.png
+          grep -E "RIMAL_STATUS|ERROR|Error|MapError|Update failed" results/app-console.txt | head -60 || true
+          grep -q '"engine":true' results/app-console.txt && grep -q '"webgl2":true' results/app-console.txt && echo "iPad smoke test: engine + WebGL2 OK"
+
+      - name: Build unsigned device app (.ipa)
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release -sdk iphoneos \
+            -derivedDataPath build/dev CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build | tail -15
+          mkdir -p Payload && cp -R build/dev/Build/Products/Release-iphoneos/App.app Payload/
+          zip -qry Rimal-iPad-unsigned.ipa Payload && ls -lh Rimal-iPad-unsigned.ipa
+
+      - name: Publish .ipa (Releases → "Rimal for iPad")
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete ios-latest --yes --cleanup-tag 2>/dev/null || true
+          gh release create ios-latest Rimal-iPad-unsigned.ipa --title "Rimal for iPad (unsigned) ${{ github.run_number }}" --latest=false \
+            --notes "Unsigned iPad build from commit ${{ github.sha }}. Sign and install it with your Apple ID using Sideloadly or AltStore (free Apple ID: re-sign every 7 days), or with an Apple Developer account / TestFlight."
+
+      - name: Publish screenshots and logs to the test-results-ios branch
+        if: always()
+        run: |
+          mkdir -p results && cd results
+          git init -q -b test-results-ios
+          git config user.name "rimal-ci"; git config user.email "rimal-ci@users.noreply.github.com"
+          echo "Run ${{ github.run_id }} on ${{ github.sha }}" > RUN.txt
+          git add -A && git commit -q -m "iOS run ${{ github.run_id }}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" test-results-ios

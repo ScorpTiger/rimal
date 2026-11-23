@@ -9,6 +9,7 @@ let wakeLock;
 
 export const native = {
   isNative,
+  platform: Capacitor.getPlatform(),
 
   async keepAwake() {
     try {

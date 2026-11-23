@@ -23,4 +23,5 @@ export default defineConfig({
   build: { outDir: 'dist', target: 'es2020', chunkSizeWarningLimit: 2000 },
   server: { host: true },
   plugins: [precache()],
+  define: { __BUILD__: JSON.stringify(`${new Date().toISOString().slice(0, 16)}${process.env.GITHUB_SHA ? ' ' + process.env.GITHUB_SHA.slice(0, 7) : ''}`) },
 });

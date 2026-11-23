@@ -1,3 +1,4 @@
+import { buildReport, summary as reportSummary, noteFix, noteGpsError } from './diagnostics.js';
 import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Protocol, PMTiles, FileSource, TileType } from 'pmtiles';
@@ -284,13 +285,14 @@ function setUpdateMsg(m) { state.update.msg = m; const el = $('updState'); el.te
 /* =========================================================
    GPS, dashboard, sensors
    ========================================================= */
-const gps = new GPS(onFix, (msg) => { setGpsPill(msg.includes('denied') ? 'NO PERMISSION' : 'NO GPS', ''); if (msg.includes('denied')) toast(msg); });
+const gps = new GPS(onFix, (msg) => { noteGpsError(msg); setGpsPill(msg.includes('denied') ? 'NO PERMISSION' : 'NO GPS', ''); if (msg.includes('denied')) toast(msg); });
 const attitude = new Attitude(onAttitude);
 let staleTimer, lastGroundAt = 0, lastOdo = null;
 
 function setGpsPill(text, cls) { const p = $('gpsState'); p.textContent = text; p.className = 'pill ' + cls; }
 
 function onFix(f) {
+  noteFix(f);
   const wasFirst = !state.fix;
   state.fix = f;
   clearTimeout(staleTimer);
@@ -1145,7 +1147,9 @@ function toolsSheet() {
     <button data-a="sos" class="sos"><i>SOS</i>Emergency</button>
     <button data-a="settings"><i>⚙</i>Settings</button>
     <button data-a="backup"><i>💾</i>Backup</button>
+    <button data-a="report"><i>🧪</i>Test report</button>
   </div>`, {
+    report: reportSheet,
     plan: () => startPlan('route'), measure: () => startPlan('measure'), tilt: tiltSheet, wx: weatherSheet, fuel: fuelSheet, sun: sunSheet,
     sos: sosSheet, settings: settingsSheet,
     backup: () => openSheet('Backup & restore', `<p class="note">Saves all trips, routes, waypoints and settings into one file (Documents/Rimal). Restore it on this or another unit via Trips → Import.</p><div class="btns"><button class="primary" data-a="b">💾 Create backup</button><button class="btn" data-a="r">Restore from file</button></div>`, { b: backup, r: () => pickFile('.json,application/json', importFiles, false) }),
@@ -1199,6 +1203,24 @@ function sosSheet() {
     <div class="btns"><a class="primary btnlink" href="tel:911">📞 911</a><a class="btn btnlink" href="tel:997">Red Crescent 997</a><a class="btn btnlink" href="sms:?body=${encodeURIComponent(text)}">✉ Send location by SMS</a><button class="btn" data-a="wp">⚑ Save this spot</button></div>
     <p class="note">Read the coordinates to the operator. SMS works with very weak signal — try it even with one bar.</p>`, {
     wp: () => addWaypoint(f.lon, f.lat, f.alt, 'Emergency position'),
+  });
+}
+
+/* ---------- Field-test report ---------- */
+function reportSheet() {
+  openSheet('Test report', `
+    <p class="note">Use this after a test drive or when something goes wrong. It saves one file with the device details, GPS quality, sensors, maps, speed and recent errors — no trips or personal data beyond your current position.</p>
+    <div class="field"><label>What happened? (optional)</label><textarea id="rNote" placeholder="e.g. map went blank after 20 min near Al Thumamah; GPS jumped; screen froze when…"></textarea></div>
+    <div class="btns"><button class="primary" data-a="make">🧪 Create report</button></div>
+    <pre id="rSum" class="note" style="white-space:pre-wrap"></pre>`, {
+    make: async () => {
+      $('rSum').textContent = 'Collecting (3 s)…';
+      const r = await buildReport({ state, S, map, tiles, attitude, native }, $('rNote').value);
+      const name = `rimal-report-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.json`;
+      const where = await native.saveText(name, JSON.stringify(r, null, 1));
+      $('rSum').textContent = reportSummary(r) + `\n\nSaved: ${where || name}`;
+      toast(where ? `Report saved to ${where}` : 'Report downloaded', 6000);
+    },
   });
 }
 
@@ -1271,7 +1293,7 @@ async function boot() {
   map.addControl(new maplibregl.ScaleControl({ unit: S.units === 'imperial' ? 'imperial' : 'metric' }), 'bottom-left');
   map.once('style.load', () => { applyTerrain(); refreshOverlays(); });
   updateNoMapHint();
-  window.__rimal = { map, state, S, gps, tiles, packs, store, native, checkUpdates, setS, applyStyle, stopRecording, startRoute, startGoto, refreshWeather, attitude };
+  window.__rimal = { map, state, S, gps, tiles, packs, store, native, checkUpdates, setS, applyStyle, stopRecording, startRoute, startGoto, refreshWeather, attitude, buildReport: (note) => buildReport({ state, S, map, tiles, attitude, native }, note) };
 
   // Log map errors as readable text (default handler prints "[object Object]" in Android logs).
   map.on('error', (e) => console.warn('MapError', e.sourceId || '', e.error?.message || String(e.error)));
@@ -1339,6 +1361,10 @@ async function boot() {
   setInterval(() => { updateDash(); store.saveSetting('odometer', S.odometer); }, 5000);
   native.keepAwake();
   gps.start(S.demoGps);
+
+  // Status line for automated device tests (Android logcat / iOS console).
+  const status = () => console.log('RIMAL_STATUS ' + JSON.stringify({ platform: native.platform, engine: state.engineOk, webgl2: !!document.createElement('canvas').getContext('webgl2'), opfs: !!navigator.storage?.getDirectory, fix: state.fix && [+state.fix.lon.toFixed(4), +state.fix.lat.toFixed(4), state.fix.acc], maps: Object.keys(state.maps).length, styleLoaded: map.isStyleLoaded(), zoom: +map.getZoom().toFixed(1), sensor: attitude.available }));
+  setTimeout(status, 20000); setTimeout(status, 60000);
 
   // Automatic map updates: shortly after start, whenever the connection comes back, and every 6 hours.
   setTimeout(() => checkUpdates(false), 8000);

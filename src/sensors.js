@@ -53,6 +53,16 @@ export class Attitude {
   }
 
   start() {
+    // iOS/iPadOS only delivers motion events after the user grants permission from a tap.
+    const DM = window.DeviceMotionEvent;
+    if (DM && typeof DM.requestPermission === 'function') {
+      const ask = () => {
+        DM.requestPermission().catch(() => {});
+        window.DeviceOrientationEvent?.requestPermission?.().catch(() => {});
+        document.removeEventListener('click', ask, true);
+      };
+      document.addEventListener('click', ask, true);
+    }
     let motion = false;
     // accelerationIncludingGravity at rest points UP (it measures the support force).
     window.addEventListener('devicemotion', (e) => {
