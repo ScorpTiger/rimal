@@ -1,0 +1,32 @@
+{
+  "name": "rimal-offroad",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "copy-worker": "node -e \"require('fs').copyFileSync('node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs','public/maplibre-gl-worker.js')\"",
+    "dev": "npm run copy-worker && vite",
+    "build": "npm run copy-worker && vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@capacitor-community/keep-awake": "^8.0.1",
+    "@capacitor/android": "^8.6.2",
+    "@capacitor/core": "^8.6.2",
+    "@capacitor/filesystem": "^8.1.5",
+    "@capacitor/share": "^8.0.3",
+    "@protomaps/basemaps": "^5.7.2",
+    "maplibre-contour": "^0.2.0",
+    "maplibre-gl": "^6.19.0",
+    "pmtiles": "^4.5.0",
+    "suncalc": "^2.1.4"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.6.2",
+    "vite": "^8.3.8"
+  },
+  "type": "module"
+}

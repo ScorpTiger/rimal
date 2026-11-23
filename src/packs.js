@@ -1,0 +1,114 @@
+// Offline map packs + automatic updates.
+// Packs are published as GitHub releases (see .github/workflows/build-packs.yml):
+//   tag  pack-<kind>-<YYYYMMDD>   asset  ksa-<kind>.pmtiles  (or ksa-poi.json)
+// kind = map | terrain | satellite | poi
+// The newest two versions of every pack are kept on the device: if the new one is damaged or missing an area,
+// the previous one is still there and is used automatically.
+import { Capacitor } from '@capacitor/core';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import * as store from './storage.js';
+
+export const KINDS = { map: 'Street & track map', terrain: 'Terrain (3D, hillshade, contours)', satellite: 'Satellite imagery', poi: 'Places & POIs (search)' };
+export const KEEP_VERSIONS = 2;
+
+export const versionOf = (name) => (name.match(/(\d{8})/) || [])[1] || '00000000';
+export function kindOfFile(name, meta = {}) {
+  const n = name.toLowerCase();
+  if (meta.rimal_kind) return meta.rimal_kind;
+  if (/terrain|dem|elev/.test(n)) return 'terrain';
+  if (/sat|imagery|aerial|ortho/.test(n)) return 'satellite';
+  return null; // decided from the tile type by the caller
+}
+
+function headers(token, binary) {
+  const h = { Accept: binary ? 'application/octet-stream' : 'application/vnd.github+json' };
+  if (token) h.Authorization = `Bearer ${token}`;
+  return h;
+}
+
+/** Ask GitHub which pack versions exist. Returns the newest per kind. */
+export async function listRemote(repo, token) {
+  const r = await fetch(`https://api.github.com/repos/${repo}/releases?per_page=40`, { headers: headers(token) });
+  if (r.status === 404) throw new Error(token ? 'Repository not found' : 'Repository not found — if it is private, add an access token');
+  if (!r.ok) throw new Error(`GitHub answered ${r.status}`);
+  const releases = await r.json();
+  const newest = {};
+  for (const rel of releases) {
+    const m = rel.tag_name.match(/^pack-(map|terrain|satellite|poi)-(\d{8})/);
+    if (!m || rel.draft) continue;
+    const asset = rel.assets.find((a) => /\.(pmtiles|json)$/.test(a.name));
+    if (!asset) continue;
+    const [, kind, version] = m;
+    if (!newest[kind] || newest[kind].version < version) {
+      newest[kind] = { kind, version, size: asset.size, name: asset.name, url: token ? asset.url : asset.browser_download_url, notes: rel.name, published: rel.published_at };
+    }
+  }
+  return newest;
+}
+
+/** Download one pack version into on-device storage. Returns the stored file name. */
+export async function download(item, token, onProgress, signal) {
+  const ext = item.name.endsWith('.json') ? 'json' : 'pmtiles';
+  const file = `ksa-${item.kind}-${item.version}.${ext}`;
+  let stream;
+  let cleanup = async () => {};
+  if (Capacitor.isNativePlatform()) {
+    // Native download (no CORS, survives the WebView being busy), then stream it into app storage.
+    const path = `dl/${file}`;
+    const h = await Filesystem.addListener('progress', (p) => onProgress?.(0.9 * (p.bytes / (p.contentLength || item.size || 1)), p.bytes));
+    try {
+      const res = await Filesystem.downloadFile({ url: item.url, path, directory: Directory.Cache, progress: true, recursive: true, headers: headers(token, true) });
+      const uri = Capacitor.convertFileSrc(res.path || (await Filesystem.getUri({ path, directory: Directory.Cache })).uri);
+      stream = (await fetch(uri)).body;
+      cleanup = () => Filesystem.deleteFile({ path, directory: Directory.Cache }).catch(() => {});
+    } finally { h.remove(); }
+  } else {
+    const r = await fetch(item.url, { headers: token ? headers(token, true) : {}, signal });
+    if (!r.ok) throw new Error(`Download failed (${r.status})`);
+    stream = r.body;
+  }
+  try {
+    if (ext === 'json') {
+      const text = await new Response(stream).text();
+      const data = JSON.parse(text);
+      await store.put('kv', { version: item.version, data }, `poi:${item.version}`);
+    } else {
+      await store.writeStreamToOPFS(file, stream, Capacitor.isNativePlatform() ? 0 : item.size, (p) => onProgress?.(Capacitor.isNativePlatform() ? 0.9 + 0.1 * p : p));
+    }
+  } finally { await cleanup(); }
+  return file;
+}
+
+/** Delete all but the newest KEEP_VERSIONS files of each kind. `files` = [{name, kind}] */
+export async function prune(files) {
+  const byKind = {};
+  for (const f of files) if (f.kind) (byKind[f.kind] ||= []).push(f);
+  const removed = [];
+  for (const list of Object.values(byKind)) {
+    list.sort((a, b) => versionOf(b.name).localeCompare(versionOf(a.name)));
+    for (const f of list.slice(KEEP_VERSIONS)) {
+      if (!/\d{8}/.test(f.name)) continue; // never auto-delete files the user imported by hand
+      await store.deleteMapFile(f.name); removed.push(f.name);
+    }
+  }
+  // POI versions live in IndexedDB
+  const kv = await store.getAllKeys('kv');
+  const pois = kv.filter((k) => String(k).startsWith('poi:')).sort().reverse();
+  for (const k of pois.slice(KEEP_VERSIONS)) { await store.del('kv', k); removed.push(k); }
+  return removed;
+}
+
+export async function latestPOI() {
+  const keys = (await store.getAllKeys('kv')).filter((k) => String(k).startsWith('poi:')).sort().reverse();
+  for (const k of keys) { const v = await store.get('kv', k); if (v?.data?.length) return v; }
+  return null;
+}
+
+export function connectionOk(policy) {
+  if (policy === 'off') return false;
+  if (navigator.onLine === false) return false;
+  const c = navigator.connection;
+  if (policy === 'wifi' && c && c.type && ['cellular', 'bluetooth', 'wimax'].includes(c.type)) return false;
+  if (c && c.saveData && policy === 'wifi') return false;
+  return true;
+}

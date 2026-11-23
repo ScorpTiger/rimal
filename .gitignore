@@ -1,0 +1,10 @@
+node_modules/
+dist/
+android/app/build/
+android/build/
+android/.gradle/
+android/app/src/main/assets/public/
+android/local.properties
+*.pmtiles
+.DS_Store
+public/maplibre-gl-worker.js

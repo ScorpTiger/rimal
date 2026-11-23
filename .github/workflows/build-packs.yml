@@ -1,0 +1,99 @@
+name: Build offline map packs
+
+# Runs on the 1st of every month (fresh OpenStreetMap data) and on demand from the Actions tab.
+# Each pack is published as a release "pack-<kind>-<YYYYMMDD>". The Rimal app checks these releases
+# whenever it is online and installs new versions automatically, keeping the previous one as a backup.
+on:
+  schedule:
+    - cron: "17 2 1 * *"
+  workflow_dispatch:
+    inputs:
+      packs:
+        description: "Which packs to build (comma separated: map,terrain,satellite,poi)"
+        default: "map,terrain,satellite,poi"
+      map_maxzoom:
+        description: "Street map max zoom (15 = full detail, 14 = about half the size)"
+        default: "15"
+      raster_maxzoom:
+        description: "Country-wide satellite & terrain max zoom (10 ≈ 150 m/px overview; zoom further with in-app area downloads)"
+        default: "10"
+
+permissions:
+  contents: write
+
+env:
+  BBOX: "34.4,16.2,55.8,32.3"
+  PACKS: ${{ github.event.inputs.packs || 'map,terrain,satellite,poi' }}
+  MAP_MAXZOOM: ${{ github.event.inputs.map_maxzoom || '15' }}
+  RASTER_MAXZOOM: ${{ github.event.inputs.raster_maxzoom || '10' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    strategy:
+      fail-fast: false
+      matrix:
+        kind: [map, terrain, satellite, poi]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Skip if not requested
+        id: want
+        run: |
+          if echo ",$PACKS," | grep -q ",${{ matrix.kind }},"; then echo "go=1" >> "$GITHUB_OUTPUT"; else echo "go=0" >> "$GITHUB_OUTPUT"; fi
+          echo "date=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-python@v5
+        if: steps.want.outputs.go == '1' && matrix.kind != 'map'
+        with: { python-version: "3.12" }
+
+      - name: Install Python tools
+        if: steps.want.outputs.go == '1' && matrix.kind != 'map'
+        run: pip install pmtiles requests
+
+      # ---- street & track map: cut Saudi Arabia out of the latest Protomaps world build ----
+      - name: Build street map
+        if: steps.want.outputs.go == '1' && matrix.kind == 'map'
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          gh release download --repo protomaps/go-pmtiles --pattern '*Linux_x86_64.tar.gz' --output pmtiles.tgz
+          tar xzf pmtiles.tgz pmtiles
+          for i in $(seq 0 21); do
+            d=$(date -u -d "-$i day" +%Y%m%d)
+            if curl -sfI "https://build.protomaps.com/$d.pmtiles" >/dev/null; then src="https://build.protomaps.com/$d.pmtiles"; break; fi
+          done
+          [ -n "$src" ] || { echo "No Protomaps build found"; exit 1; }
+          ./pmtiles extract "$src" ksa-map.pmtiles --bbox="$BBOX" --maxzoom="$MAP_MAXZOOM" --download-threads=8
+          ./pmtiles show ksa-map.pmtiles | head -20
+
+      - name: Build terrain pack
+        if: steps.want.outputs.go == '1' && matrix.kind == 'terrain'
+        run: python scripts/build_raster_pack.py --kind terrain --out ksa-terrain.pmtiles --maxzoom "$RASTER_MAXZOOM" --bbox "$BBOX"
+
+      - name: Build satellite pack
+        if: steps.want.outputs.go == '1' && matrix.kind == 'satellite'
+        run: python scripts/build_raster_pack.py --kind satellite --out ksa-satellite.pmtiles --maxzoom "$RASTER_MAXZOOM" --bbox "$BBOX"
+
+      - name: Build places & POI pack
+        if: steps.want.outputs.go == '1' && matrix.kind == 'poi'
+        run: python scripts/build_poi_pack.py ksa-poi.json
+
+      - name: Publish release
+        if: steps.want.outputs.go == '1'
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          f=$(ls ksa-${{ matrix.kind }}.* | head -1)
+          size=$(stat -c%s "$f"); ls -lh "$f"
+          if [ "$size" -gt 2000000000 ]; then echo "::error::$f is over 2 GB (GitHub limit). Lower the zoom."; exit 1; fi
+          tag="pack-${{ matrix.kind }}-${{ steps.want.outputs.date }}"
+          gh release delete "$tag" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$tag" "$f" --title "Rimal ${{ matrix.kind }} pack ${{ steps.want.outputs.date }}" \
+            --notes "Offline ${{ matrix.kind }} pack for Saudi Arabia. Installed automatically by Rimal when online, or copy to USB and use Maps → Updates & files → Import. Map data © OpenStreetMap contributors (ODbL)."
+
+      - name: Keep only the newest 3 releases of this pack
+        if: steps.want.outputs.go == '1'
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          gh release list --limit 100 --json tagName --jq '.[].tagName' | grep "^pack-${{ matrix.kind }}-" | sort -r | tail -n +4 | \
+            while read t; do gh release delete "$t" --yes --cleanup-tag; done

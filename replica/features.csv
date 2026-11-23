@@ -1,0 +1,45 @@
+feature,area,priority,original,clone,notes
+Offline vector topo map,maps,must,Garmin topo (preloaded),yes,OSM via Protomaps pack; English/Arabic labels
+Satellite imagery view (default),maps,must,BirdsEye (download via Wi-Fi; US only),yes,Hybrid default; EOX Sentinel-2 + optional custom source; KSA coverage
+Imagery area download,maps,must,BirdsEye downloads,yes,Download this area with zoom choice; size estimate; resumable
+Cache imagery while browsing online,maps,should,—,yes,Not in Garmin; every tile seen online is kept offline
+Show lower-zoom detail when a tile is missing,maps,should,—,yes,Parent tile upscaled so the map is never blank
+3D terrain,maps,should,3D terrain,yes,MapLibre terrain from AWS open DEM
+Hillshade,maps,should,topo shading,yes,
+Contour lines,maps,should,topo contours,yes,maplibre-contour; 10–100 m intervals
+Automatic map updates when online,maps,must,Map updates via Wi-Fi/Express (manual),yes,Background check + download; keep previous version; auto-fallback
+Keep previous map version,maps,must,—,yes,Last 2 versions per pack retained
+Map views north-up / track-up / 3D,maps,must,Map view,yes,
+Night mode,maps,should,auto night colours,yes,
+Track recorder (breadcrumbs),tracks,must,Track recorder,yes,Auto-start on movement; crash-safe
+Trips log (save trips),tracks,must,Where I've Been,yes,Trips with segments/notes/stats/profile/waypoints; continue a trip
+TrackBack,navigation,must,navigate a track (reverse),yes,Off-track alarm
+Follow track,navigation,must,navigate a track,yes,
+Go-To waypoint/coordinates,navigation,must,Go to location / coordinates,yes,Decimal/DM/DMS/UTM/Google links
+Project waypoint (bearing + distance),navigation,should,—,yes,
+Route planner,navigation,should,Explore routes,yes,Tap points; distances; navigate
+Measure distance,tools,should,—,yes,Via planner
+Waypoints with notes/colour,data,must,Waypoints,yes,
+Proximity alerts for waypoints,alerts,should,—,yes,Alert radius per waypoint (hazards)
+Library,data,must,Library,yes,Trips/routes/waypoints tabs
+Collections,data,could,Collections,no,
+GPX import/export,data,must,GPX via microSD,yes,
+KML/GeoJSON import,data,could,—,yes,
+Backup and restore,data,should,Explore sync,yes,One file to USB
+Pitch and roll gauges,sensors,must,Pitch and roll,yes,Device sensors; calibrate; warning angle + sound
+Compass,sensors,should,ABC compass,yes,Sensor when available; GPS course otherwise
+Altimeter,sensors,should,ABC altimeter,yes,GPS altitude + DEM ground elevation
+Barometer,sensors,skip,ABC barometer,no,Hardware not exposed on head units
+Configurable data fields,ui,must,Map data fields,yes,Choose fields for every dashboard slot
+Trip data (odometer/averages),ui,must,Trip Data,yes,
+Elevation profile,ui,should,Elevation ahead,yes,For trips and routes
+Sunrise / sunset,ui,should,Sunrise/sunset times,yes,Plus a sunset warning
+Weather,ui,could,inReach weather,yes,Open-Meteo when online; last forecast cached
+POI search (fuel/water/camp/hospital),poi,must,Where To / iOverlander / campgrounds,yes,OSM POI pack; nearest by category
+Fuel range / point of no return,alerts,should,—,yes,Not in Garmin
+Speed alert,alerts,could,Driver alerts,yes,
+SOS / emergency coordinates screen,safety,should,inReach SOS,yes,Shows position; SMS coordinates; KSA 911/997
+inReach messaging,comms,skip,inReach remote,no,Garmin network + hardware
+Turn-by-turn road routing,navigation,skip,Street navigation,no,Needs a routing graph pack; separate project
+Live traffic,road,skip,Traffic,no,Partner service
+Fusion / PowerSwitch,accessories,skip,Apps,no,Partner hardware

@@ -1,0 +1,9 @@
+{
+  "appId": "com.rimal.offroad",
+  "appName": "Rimal",
+  "webDir": "dist",
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#14110d"
+  }
+}

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#14110d" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.svg" />
+  <title>Rimal — Off-Road Navigator</title>
+</head>
+<body>
+  <div id="app">
+    <div id="map"></div>
+
+    <!-- Dashboard -->
+    <aside id="dash">
+      <div class="brand">RIMAL <span id="gpsState" class="pill">NO GPS</span></div>
+      <div class="big"><span id="dSpeed">—</span><small id="dSpeedUnit">km/h</small></div>
+      <div class="grid" id="fields"></div>
+      <div class="coord" id="dCoord">—</div>
+      <div id="updState" class="upd" hidden></div>
+      <div id="recState" class="rec idle">Not recording</div>
+    </aside>
+
+    <!-- Navigation banner -->
+    <div id="navBar" hidden>
+      <div class="navArrow"><svg viewBox="0 0 100 100" id="navArrowSvg"><path d="M50 6 L84 86 L50 68 L16 86 Z"/></svg></div>
+      <div class="navInfo">
+        <div class="navName" id="navName">—</div>
+        <div class="navNums">
+          <span><label>Distance</label><b id="navDist">—</b></span>
+          <span><label>Bearing</label><b id="navBrg">—</b></span>
+          <span><label>ETA</label><b id="navEta">—</b></span>
+          <span id="navOffWrap"><label>Off track</label><b id="navOff">—</b></span>
+        </div>
+      </div>
+      <button class="navStop" id="navStop" title="Stop navigation">✕</button>
+    </div>
+    <div id="alertBar" hidden></div>
+
+    <div id="planBar" hidden>
+      <div id="planInfo"></div>
+      <div class="btns"><button id="planUndo" class="btn sm">↶ Undo</button><button id="planSave" class="btn sm">Save route</button><button id="planGo" class="primary sm">➤ Navigate</button><button id="planClose" class="btn sm">✕</button></div>
+    </div>
+
+    <button id="tilt" hidden title="Pitch &amp; roll"><div id="tiltPitch"></div><div id="tiltRoll"></div></button>
+
+    <!-- Toolbar -->
+    <nav id="tools">
+      <button id="bRec" class="tool rec-btn" title="Record track"><i>●</i><span>Record</span></button>
+      <button id="bMark" class="tool" title="Mark waypoint"><i>⚑</i><span>Mark</span></button>
+      <button id="bGoto" class="tool" title="Go to"><i>➤</i><span>Go To</span></button>
+      <button id="bBack" class="tool" title="TrackBack"><i>↶</i><span>TrackBack</span></button>
+      <button id="bSearch" class="tool" title="Search &amp; POIs"><i>⌕</i><span>Search</span></button>
+      <button id="bLib" class="tool" title="Trips, routes &amp; waypoints"><i>☰</i><span>Trips</span></button>
+      <button id="bMaps" class="tool" title="Maps &amp; layers"><i>🛰</i><span>Maps</span></button>
+      <button id="bTools" class="tool" title="Tools"><i>⋯</i><span>Tools</span></button>
+    </nav>
+
+    <div id="mapBtns">
+      <button id="bCompass" class="round" title="North-up / heading-up"><svg viewBox="0 0 40 40"><path d="M20 3 L27 20 L20 17 L13 20Z" fill="#e5484d"/><path d="M20 37 L27 20 L20 23 L13 20Z" fill="currentColor"/></svg></button>
+      <button id="b3d" class="round txt" title="3D terrain">3D</button>
+      <button id="bLayer" class="round" title="Satellite / topo">◧</button>
+      <button id="bZoomIn" class="round">+</button>
+      <button id="bZoomOut" class="round">−</button>
+      <button id="bFollow" class="round" title="Follow my position">◎</button>
+    </div>
+
+    <div id="noMap" hidden>
+      <h2>No offline maps on this unit yet</h2>
+      <p>Connect to the internet once: satellite imagery appears and is kept as you look around, and map updates install automatically. Or open <b>Maps</b> to import a map file from USB. GPS, trips and navigation already work.</p>
+      <button id="noMapBtn" class="primary">Open Maps</button>
+    </div>
+
+    <div id="sheet" hidden><div class="sheetBox"><header><h2 id="sheetTitle"></h2><button id="sheetClose">✕</button></header><div id="sheetBody"></div></div></div>
+    <div id="toast" hidden></div>
+    <input type="file" id="fileInput" hidden />
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
