@@ -18,7 +18,8 @@ export async function weather(lon, lat, force = false) {
   if (!isOnline()) return cached || null;
   try {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}&current=temperature_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,weather_code,visibility&hourly=temperature_2m,wind_gusts_10m,precipitation_probability&daily=temperature_2m_max,temperature_2m_min,wind_gusts_10m_max,precipitation_sum&forecast_days=4&timezone=auto`;
-    const data = await netJSON(url, 12000);
+    let data;
+    try { data = await netJSON(url, 25000); } catch { await new Promise((r) => setTimeout(r, 2000)); data = await netJSON(url, 25000); } // weak desert signal: one retry
     const out = { at: Date.now(), at_pos: [lon, lat], data };
     await store.put('kv', out, 'weather');
     return out;
