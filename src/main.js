@@ -1267,8 +1267,10 @@ async function boot() {
   map.addControl(new maplibregl.ScaleControl({ unit: S.units === 'imperial' ? 'imperial' : 'metric' }), 'bottom-left');
   map.once('style.load', () => { applyTerrain(); refreshOverlays(); });
   updateNoMapHint();
-  window.__rimal = { map, state, S, gps, tiles, packs, store, native, checkUpdates, setS, applyStyle, stopRecording, startRoute, startGoto };
+  window.__rimal = { map, state, S, gps, tiles, packs, store, native, checkUpdates, setS, applyStyle, stopRecording, startRoute, startGoto, refreshWeather };
 
+  // Log map errors as readable text (default handler prints "[object Object]" in Android logs).
+  map.on('error', (e) => console.warn('MapError', e.sourceId || '', e.error?.message || String(e.error)));
   map.on('dragstart', (e) => { if (e.originalEvent) unfollow(); });
   map.on('rotate', () => { $('bCompass').querySelector('svg').style.transform = `rotate(${-map.getBearing()}deg)`; });
   map.on('moveend', () => { const c = map.getCenter(); S.lastView = { center: [c.lng, c.lat], zoom: map.getZoom() }; store.saveSetting('lastView', S.lastView); });

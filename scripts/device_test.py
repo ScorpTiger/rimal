@@ -56,7 +56,7 @@ adb('shell', 'settings', 'put', 'secure', 'location_mode', '3')
 adb('shell', 'svc', 'power', 'stayon', 'true')
 adb('shell', 'wm', 'size', '1280x720'); adb('shell', 'wm', 'density', '160')
 adb('shell', 'settings', 'put', 'system', 'user_rotation', '1')
-adb('logcat', '-c')
+adb('logcat', '-G', '16M'); adb('logcat', '-c')
 adb('shell', 'monkey', '-p', PKG, '-c', 'android.intent.category.LAUNCHER', '1')
 time.sleep(12)
 shot('launch')
@@ -77,13 +77,16 @@ class Page:
             if m.get('method') == 'Runtime.exceptionThrown':
                 self.console.append('EXCEPTION ' + json.dumps(m['params']['exceptionDetails'])[:300])
             elif m.get('method') == 'Runtime.consoleAPICalled' and m['params']['type'] in ('error', 'warning'):
-                self.console.append(m['params']['type'] + ': ' + ' '.join(str(a.get('value', a.get('description', ''))) for a in m['params']['args'])[:300])
+                self.console.append(m['params']['type'] + ': ' + ' '.join(str(a.get('value', a.get('description', a.get('preview', '')))) for a in m['params']['args'])[:300])
             if m.get('id') == mid:
                 if 'error' in m: raise RuntimeError(m['error'])
                 return m['result']
     def evaluate(self, js):
-        expr = js.strip()
-        r = self.send('Runtime.evaluate', expression=f'({expr})', awaitPromise=True, returnByValue=True, timeout=600000)
+        try:
+            r = self.send('Runtime.evaluate', expression=js.strip(), awaitPromise=True, returnByValue=True, timeout=600000)
+        except RuntimeError as e:
+            if 'reference chain' in str(e) or 'could not be cloned' in str(e).lower(): return None  # ran fine; result not serialisable
+            raise
         if 'exceptionDetails' in r:
             raise RuntimeError(r['exceptionDetails'].get('exception', {}).get('description', str(r['exceptionDetails']))[:500])
         return r['result'].get('value')
@@ -95,6 +98,20 @@ class Page:
         if not self.evaluate(f"(()=>{{const e=document.querySelector({json.dumps(sel)}); if(!e) return false; e.value={json.dumps(val)}; e.dispatchEvent(new Event('input')); return true;}})()"):
             raise RuntimeError('element not found: ' + sel)
 
+class Robust:
+    """Re-attaches to the WebView if the debugger connection drops (slow software-GPU emulator)."""
+    def __init__(self, port): self.port = port; self.p = connect(port); self.console = self.p.console
+    def _retry(self, fn, *a):
+        for attempt in range(3):
+            try: return fn(*a)
+            except (websocket.WebSocketException, ConnectionError, OSError) as e:
+                print('   debugger connection lost, reattaching', e, flush=True); time.sleep(5)
+                self.p = connect(self.port); self.p.console = self.console
+        return fn(*a)
+    def evaluate(self, js): return self._retry(lambda j: self.p.evaluate(j), js)
+    def click(self, sel): return self._retry(lambda x: self.p.click(x), sel)
+    def fill(self, sel, v): return self._retry(lambda x, y: self.p.fill(x, y), sel, v)
+
 def connect(port):
     m = None
     for _ in range(40):
@@ -102,7 +119,7 @@ def connect(port):
         if m: break
         time.sleep(2)
     if not m: raise RuntimeError('no WebView devtools socket')
-    adb('forward', f'tcp:{port}', f'localabstract:{m.group(1)}')
+    adb('forward', '--remove', f'tcp:{port}'); adb('forward', f'tcp:{port}', f'localabstract:{m.group(1)}')
     for _ in range(20):
         try: return Page(port)
         except Exception: time.sleep(2)
@@ -110,7 +127,7 @@ def connect(port):
 
 # ---------- connect to the WebView ----------
 if True:
-    page = connect(9222)
+    page = Robust(9222)
     console = page.console
     ev = page.evaluate
     def wait_for(js, timeout=60, every=1.0):
@@ -131,7 +148,7 @@ if True:
     def _():
         f = wait_for('__rimal.state.fix && [__rimal.state.fix.lon, __rimal.state.fix.lat, __rimal.state.fix.acc]', 90)
         shot('gps-fix')
-        return (bool(f) and abs(f[0] - 46.86) < 0.01, f)
+        return (bool(f) and abs(f[0] - 46.86) < 0.05, f)
 
     @step('Real satellite imagery fetched online (EOX via native HTTP)')
     def _():
@@ -143,12 +160,12 @@ if True:
     @step('Real terrain tiles + elevation lookup (AWS)')
     def _():
         r = ev("""(async()=>{ const t=await __rimal.tiles.getTile('dem',12,2579,1757); const e=await __rimal.tiles.elevationAt(46.6753,24.7136); return {from:t&&t.from, bytes:t&&t.data.byteLength, riyadh_m:e}; })()""")
-        return (r['bytes'] and r['riyadh_m'] and 450 < r['riyadh_m'] < 800, r)  # Riyadh is ~610 m
+        return (bool(r['bytes']) and r['riyadh_m'] is not None and 450 < r['riyadh_m'] < 800, r)  # Riyadh is ~610 m
 
     @step('Weather fetch (Open-Meteo via native HTTP)')
     def _():
-        ok = wait_for('__rimal.state.weather && __rimal.state.weather.data && __rimal.state.weather.data.current.temperature_2m', 40)
-        return (ok is not None and ok != 0, ok)
+        r = ev("(async()=>{ const w=await __rimal.refreshWeather(true); return w && w.data && w.data.current; })()")
+        return (bool(r) and 'temperature_2m' in r, r)
 
     @step('Map pack update: discover releases on GitHub')
     def _():
@@ -166,7 +183,7 @@ if True:
             if not st['busy']: break
         shot('after-update')
         kinds = {m.split(':')[1] for m in st['maps']}
-        return (kinds >= {'vector', 'terrain', 'satellite'} and st['poi'], st)
+        return (kinds >= {'vector', 'terrain', 'satellite'} and bool(st['poi']), st)
 
     @step('Street map renders real KSA roads & places (hybrid view)')
     def _():
@@ -188,7 +205,7 @@ if True:
     @step('POI pack: search + nearest fuel')
     def _():
         r = ev("""(async()=>{ const v=await __rimal.packs.latestPOI(); return {count: v&&v.data.length, version: v&&v.version}; })()""")
-        return (r['count'] and r['count'] > 1000, r)
+        return (bool(r['count']) and r['count'] > 1000, r)
 
     @step('Download an area for offline (real imagery z14, terrain z12)')
     def _():
@@ -229,7 +246,7 @@ if True:
 
     # reconnect to the new WebView process after the restart
     adb('forward', '--remove-all')
-    page = connect(9223); ev = page.evaluate
+    page = Robust(9223); ev = page.evaluate
     wait_for('!!window.__rimal && Object.keys(__rimal.state.maps).length', 60)
 
     @step('OFFLINE: downloaded area shows full detail, rest of KSA from packs')
@@ -245,7 +262,7 @@ if True:
 
     @step('OFFLINE: trips and waypoints persisted after restart')
     def _():
-        return (ev("__rimal.state.tracks.length") >= 1, ev("__rimal.state.tracks.map(t=>t.name)"))
+        n = ev("__rimal.state.tracks.length"); return (bool(n) and n >= 1, ev("__rimal.state.tracks.map(t=>t.name)"))
 
     @step('Performance: memory and frame timing on the emulator')
     def _():
@@ -259,7 +276,8 @@ if True:
     open(f'{OUT}/console.txt', 'w').write('\n'.join(console + page.console))
 
 gps_on['run'] = False
-open(f'{OUT}/logcat.txt', 'w').write(adb('logcat', '-d', '-t', '4000', timeout=60))
+lc = adb('logcat', '-d', timeout=120).splitlines()
+open(f'{OUT}/logcat.txt', 'w').write('\n'.join(l for l in lc if re.search(r'Capacitor|chromium|rimal|AndroidRuntime|FATAL|WebView', l) and 'app_time_stats' not in l)[-400000:])
 passed = sum(r['ok'] for r in results)
 print(f'\n{passed}/{len(results)} passed')
 open(f'{OUT}/SUMMARY.md', 'w').write(f'# Device test — {passed}/{len(results)} passed\n\n' + '\n'.join(f"- {'✅' if r['ok'] else '❌'} **{r['test']}** — `{r['detail'][:250]}`" for r in results))

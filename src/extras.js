@@ -23,7 +23,7 @@ export async function weather(lon, lat, force = false) {
     const out = { at: Date.now(), at_pos: [lon, lat], data };
     await store.put('kv', out, 'weather');
     return out;
-  } catch { return cached || null; }
+  } catch (e) { console.warn('Weather fetch failed', e?.message || e); return cached || null; }
 }
 export const WX = { 0: 'Clear', 1: 'Mostly clear', 2: 'Partly cloudy', 3: 'Overcast', 45: 'Fog', 48: 'Fog', 51: 'Drizzle', 53: 'Drizzle', 55: 'Drizzle', 61: 'Rain', 63: 'Rain', 65: 'Heavy rain', 80: 'Showers', 81: 'Showers', 82: 'Heavy showers', 95: 'Thunderstorm', 96: 'Thunderstorm + hail', 99: 'Thunderstorm + hail' };
 
