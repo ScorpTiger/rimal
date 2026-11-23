@@ -1276,14 +1276,16 @@ function checkEngine() {
   return false;
 }
 
+const withTimeout = (p, ms, label, fallback) => Promise.race([p, new Promise((r) => setTimeout(() => { console.warn(`${label} took over ${ms / 1000}s — continuing without it`); r(fallback); }, ms))]);
+
 async function boot() {
   state.engineOk = checkEngine();
-  S = await store.loadSettings();
+  S = await withTimeout(store.loadSettings(), 8000, 'Loading settings', { ...store.DEFAULTS });
   if (!S.updateRepo && import.meta.env.VITE_UPDATE_REPO) { S.updateRepo = import.meta.env.VITE_UPDATE_REPO; store.saveSetting('updateRepo', S.updateRepo); }
   document.body.classList.toggle('night', !!S.night);
   tiles.configure({ satSource: S.satSource, customUrl: S.customSatUrl, cacheWhileBrowsing: S.cacheWhileBrowsing });
-  [state.tracks, state.waypoints, state.areas] = await Promise.all([store.getAll('tracks'), store.getAll('waypoints'), store.getAll('areas')]);
-  await loadMaps();
+  [state.tracks, state.waypoints, state.areas] = await withTimeout(Promise.all([store.getAll('tracks'), store.getAll('waypoints'), store.getAll('areas')]), 8000, 'Loading trips', [[], [], []]);
+  await withTimeout(loadMaps(), 12000, 'Opening offline maps', null);
 
   map = new maplibregl.Map({
     container: 'map', style: buildStyle(), center: S.lastView.center, zoom: S.lastView.zoom,
@@ -1375,4 +1377,4 @@ async function boot() {
 
 if (!native.isNative && 'serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('./sw.js').catch(() => {});
 
-boot().catch((e) => { console.error(e); toast('Startup error: ' + e.message, 10000); });
+boot().then(() => { window.__rimalReady = true; }).catch((e) => { console.error(e); window.__rimalBootError?.('Startup: ' + (e?.stack || e?.message || e)); window.__rimalShowBootPanel?.('startup error'); toast('Startup error: ' + e.message, 10000); });

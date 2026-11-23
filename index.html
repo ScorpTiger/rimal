@@ -77,6 +77,51 @@
     <div id="toast" hidden></div>
     <input type="file" id="fileInput" hidden />
   </div>
+  <!-- Startup check (plain ES5 so it runs on any web engine): if the app fails to start,
+       show why on screen instead of a blank map. -->
+  <script>
+  (function () {
+    var errs = [];
+    function add(m) { errs.push(String(m).slice(0, 300)); var b = document.getElementById('bootErr'); if (b) b.textContent = errs.join('\n'); }
+    window.onerror = function (msg, src, line, col) { add(msg + (src ? ' @' + String(src).split('/').pop() + ':' + line + ':' + col : '')); };
+    window.addEventListener && window.addEventListener('unhandledrejection', function (e) { add('Promise: ' + (e.reason && (e.reason.message || e.reason))); });
+    window.__rimalBootError = add;
+    function info() {
+      var ua = navigator.userAgent || '';
+      var chrome = (ua.match(/Chrome\/([\d.]+)/) || [])[1];
+      var android = (ua.match(/Android ([\d.]+)/) || [])[1];
+      var gl2 = false; try { gl2 = !!document.createElement('canvas').getContext('webgl2'); } catch (e) {}
+      return { chrome: chrome, android: android, gl2: gl2, ua: ua, size: window.innerWidth + 'x' + window.innerHeight + ' @' + (window.devicePixelRatio || 1) + 'x' };
+    }
+    function show(reason) {
+      if (window.__rimalReady || document.getElementById('bootPanel')) return;
+      var i = info();
+      var major = i.chrome ? parseInt(i.chrome, 10) : null;
+      var old = major !== null && major < 100;
+      var d = document.createElement('div');
+      d.id = 'bootPanel';
+      d.setAttribute('style', 'position:fixed;inset:0;z-index:99999;background:#14110d;color:#f3ece2;font:16px/1.45 sans-serif;padding:18px 22px;overflow:auto');
+      d.innerHTML =
+        '<h2 style="color:#e8a33d;margin:0 0 8px">Rimal could not start on this screen</h2>' +
+        '<p style="margin:0 0 10px">' + (old || !i.gl2
+          ? 'This head unit\'s web engine is too old for the map. Update <b>Android System WebView</b> (or <b>Google Chrome</b>) to version 100 or newer, then open Rimal again.'
+          : 'Please take a photo of this screen and send it — it shows exactly what went wrong.') + '</p>' +
+        '<table style="border-collapse:collapse;margin-bottom:10px">' +
+        '<tr><td style="color:#a99d8c;padding:2px 14px 2px 0">Android</td><td><b>' + (i.android || '?') + '</b></td></tr>' +
+        '<tr><td style="color:#a99d8c;padding:2px 14px 2px 0">Web engine (Chrome/WebView)</td><td><b>' + (i.chrome || 'unknown') + '</b>' + (old ? ' &nbsp;<span style="color:#ff8b8e">needs 100+</span>' : '') + '</td></tr>' +
+        '<tr><td style="color:#a99d8c;padding:2px 14px 2px 0">3D graphics (WebGL2)</td><td><b>' + (i.gl2 ? 'yes' : 'NO') + '</b></td></tr>' +
+        '<tr><td style="color:#a99d8c;padding:2px 14px 2px 0">Screen</td><td><b>' + i.size + '</b></td></tr>' +
+        '<tr><td style="color:#a99d8c;padding:2px 14px 2px 0">Reason</td><td><b>' + reason + '</b></td></tr></table>' +
+        '<pre id="bootErr" style="white-space:pre-wrap;color:#ff8b8e;font-size:13px;margin:0 0 10px">' + errs.join('\n') + '</pre>' +
+        '<div style="color:#a99d8c;font-size:12px;word-break:break-all;margin-bottom:12px">' + i.ua + '</div>' +
+        '<button onclick="location.reload()" style="font-size:18px;padding:12px 22px;border-radius:12px;border:0;background:#e8a33d;color:#1b1208">Try again</button>';
+      document.body.appendChild(d);
+    }
+    window.__rimalShowBootPanel = show;
+    setTimeout(function () { show(errs.length ? 'error while starting' : 'app did not finish starting within 15 s'); }, 15000);
+  })();
+  </script>
+  <script nomodule>window.__rimalShowBootPanel && window.addEventListener('load', function () { window.__rimalShowBootPanel('web engine does not support modern JavaScript'); });</script>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>
