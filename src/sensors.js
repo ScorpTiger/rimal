@@ -1,39 +1,85 @@
-// Vehicle attitude (pitch / roll) and compass from the device's motion sensors.
-// Many head units have an accelerometer; some don't — then `available` stays false.
+// Vehicle attitude (pitch / roll) from the head unit's accelerometer, for ANY mounting angle.
+//
+// Head units are mounted upright (or tilted) in the dashboard, in landscape — so the raw phone-style
+// beta/gamma angles are meaningless for the vehicle. Instead we measure the gravity direction in the
+// device frame and compare it with a "level" reference captured when the car stands level:
+//   U = reference up vector (car level)        L = screen-right direction, made horizontal (car's lateral axis)
+//   F = U × L (car's forward axis, pointing away from the driver)
+//   pitch = asin(-u·F)  (nose up positive)      roll = asin(u·L)  (right side down positive)
+const norm = (v) => { const m = Math.hypot(...v) || 1; return v.map((x) => x / m); };
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const deg = (r) => (r * 180) / Math.PI;
+
+function screenRight() {
+  // Screen "right" in device coordinates for the current display rotation.
+  const a = (screen.orientation && screen.orientation.angle) ?? window.orientation ?? 0;
+  switch (((a % 360) + 360) % 360) {
+    case 90: return [0, 1, 0];
+    case 180: return [-1, 0, 0];
+    case 270: return [0, -1, 0];
+    default: return [1, 0, 0];
+  }
+}
+
 export class Attitude {
   constructor(onChange) {
     this.onChange = onChange;
     this.available = false;
     this.pitch = null; this.roll = null; this.compass = null;
-    this.cal = { pitch: 0, roll: 0 };
-    this._raw = { pitch: 0, roll: 0 };
+    this.cal = null;       // { up: [x,y,z], right: [x,y,z], auto: bool }
+    this.up = null;        // smoothed current up vector (device frame)
+    this.samples = 0;
   }
+
+  _update(upRaw) {
+    const u = norm(upRaw);
+    if (!u.every(Number.isFinite)) return;
+    const k = 0.2; // low-pass: vehicles bounce
+    this.up = this.up ? norm(this.up.map((x, i) => x + k * (u[i] - x))) : u;
+    this.available = true;
+    this.samples++;
+    // No saved level reference yet: assume the car is level ~2 s after start (user can recalibrate).
+    if (!this.cal && this.samples > 20) this.cal = { up: [...this.up], right: screenRight(), auto: true };
+    if (!this.cal) return;
+    const U = norm(this.cal.up);
+    let L = this.cal.right; L = norm(L.map((x, i) => x - dot(L, U) * U[i]));
+    let F = norm(cross(U, L));
+    if (F[2] > 0) F = F.map((x) => -x); // forward = away from the driver = behind the screen
+    const clamp = (x) => Math.max(-1, Math.min(1, x));
+    this.pitch = deg(Math.asin(clamp(-dot(this.up, F))));
+    this.roll = deg(Math.asin(clamp(dot(this.up, L))));
+    this.onChange?.(this);
+  }
+
   start() {
-    const handler = (e) => {
-      if (e.beta == null && e.gamma == null) return;
-      this.available = true;
-      // Smooth: vehicles bounce; a light low-pass keeps the gauge readable.
-      const k = 0.25;
-      this._raw.pitch += k * ((e.beta ?? 0) - this._raw.pitch);
-      this._raw.roll += k * ((e.gamma ?? 0) - this._raw.roll);
-      this.pitch = this._raw.pitch - this.cal.pitch;
-      this.roll = this._raw.roll - this.cal.roll;
-      if (e.absolute && e.alpha != null) this.compass = (360 - e.alpha) % 360;
-      this.onChange?.(this);
-    };
-    window.addEventListener('deviceorientationabsolute', handler);
-    window.addEventListener('deviceorientation', handler);
-    // Fallback: compute from gravity if orientation events are missing but motion is present.
+    let motion = false;
+    // accelerationIncludingGravity at rest points UP (it measures the support force).
     window.addEventListener('devicemotion', (e) => {
-      if (this.available) return;
-      const g = e.accelerationIncludingGravity; if (!g || g.x == null) return;
-      const pitch = (Math.atan2(g.y, Math.hypot(g.x, g.z)) * 180) / Math.PI;
-      const roll = (Math.atan2(-g.x, g.z) * 180) / Math.PI;
-      handler({ beta: pitch, gamma: roll });
+      const g = e.accelerationIncludingGravity;
+      if (!g || g.x == null) return;
+      motion = true;
+      this._update([g.x, g.y, g.z]);
     });
+    const orient = (e) => {
+      if (e.absolute && e.alpha != null) this.compass = (360 - e.alpha) % 360;
+      if (motion || e.beta == null || e.gamma == null) return;
+      // Fallback: up vector from orientation angles (W3C device frame).
+      const b = (e.beta * Math.PI) / 180, g = (e.gamma * Math.PI) / 180;
+      this._update([-Math.cos(b) * Math.sin(g), Math.sin(b), Math.cos(b) * Math.cos(g)]);
+    };
+    window.addEventListener('deviceorientationabsolute', orient);
+    window.addEventListener('deviceorientation', orient);
   }
-  /** Park on level ground and call this: the current mount angle becomes zero. */
-  calibrate() { this.cal = { pitch: this._raw.pitch, roll: this._raw.roll }; return this.cal; }
+
+  /** Park on level ground and call this: the current mounting becomes 0° / 0°. */
+  calibrate() {
+    if (!this.up) return this.cal;
+    this.cal = { up: [...this.up], right: screenRight(), auto: false };
+    this._update(this.up);
+    return this.cal;
+  }
+  setCalibration(c) { this.cal = c && Array.isArray(c.up) ? c : null; }
 }
 
 /** Draws a simple 4x4 silhouette tilted by the angle. view: 'side' (pitch) | 'rear' (roll) */

@@ -144,6 +144,29 @@ if True:
         info = ev("({native: __rimal.native.isNative, engine: __rimal.state.engineOk, ua: navigator.userAgent.match(/Chrome\\/[\\d.]+/)[0], opfs: !!navigator.storage?.getDirectory, repo: __rimal.S.updateRepo})")
         return (info['native'] and info['engine'], info)
 
+    @step('Pitch & roll: level at start, then real accelerometer tilts (emulator sensor)')
+    def _():
+        import math
+        time.sleep(3)
+        lvl = ev("({p: __rimal.attitude.pitch, r: __rimal.attitude.roll, cal: __rimal.attitude.cal, avail: __rimal.attitude.available})")
+        if not lvl['avail'] or not lvl['cal']: return (False, lvl)
+        U = lvl['cal']['up']; Lr = lvl['cal']['right']
+        dot = lambda a, b: sum(x * y for x, y in zip(a, b))
+        nrm = lambda v: [x / math.sqrt(dot(v, v)) for x in v]
+        L = nrm([Lr[i] - dot(Lr, U) * U[i] for i in range(3)])
+        F = nrm([U[1] * L[2] - U[2] * L[1], U[2] * L[0] - U[0] * L[2], U[0] * L[1] - U[1] * L[0]])
+        if F[2] > 0: F = [-x for x in F]
+        def tilt(direction, deg):
+            t = math.radians(deg); v = [U[i] * math.cos(t) + direction[i] * math.sin(t) for i in range(3)]
+            adb('emu', 'sensor', 'set', 'acceleration', ':'.join(f'{9.81 * x:.4f}' for x in v)); time.sleep(4)
+            return ev("[__rimal.attitude.pitch, __rimal.attitude.roll]")
+        nose_up = tilt([-x for x in F], 20)
+        right_dn = tilt(L, 15)
+        adb('emu', 'sensor', 'set', 'acceleration', ':'.join(f'{9.81 * x:.4f}' for x in U)); time.sleep(3)
+        shot('tilt-gauges')
+        ok = abs(lvl['p']) < 3 and abs(lvl['r']) < 3 and abs(nose_up[0] - 20) < 3 and abs(nose_up[1]) < 3 and abs(right_dn[1] - 15) < 3 and abs(right_dn[0]) < 3
+        return (ok, {'level': [lvl['p'], lvl['r']], 'nose_up_20': nose_up, 'right_down_15': right_dn})
+
     @step('GPS fix from Android location (permission + WebView geolocation)')
     def _():
         f = wait_for('__rimal.state.fix && [__rimal.state.fix.lon, __rimal.state.fix.lat, __rimal.state.fix.acc]', 90)

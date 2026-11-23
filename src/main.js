@@ -393,11 +393,11 @@ function tiltSheet() {
   openSheet('Pitch & roll', `
     <div class="gauges"><div>${gaugeSVG(attitude.pitch, 'side', S.pitchWarn)}<p>Pitch (nose up/down)</p></div><div>${gaugeSVG(attitude.roll, 'rear', S.rollWarn)}<p>Roll (side tilt)</p></div></div>
     ${avail ? '' : '<p class="note">No motion sensor reported by this head unit yet. If your unit has one, readings appear here automatically; otherwise pitch & roll need a phone-based or external sensor.</p>'}
-    <p class="note">Park on level ground and press <b>Calibrate</b> so the unit’s mounting angle reads as 0°.</p>
+    <p class="note">${attitude.cal?.auto ? 'Level was set automatically when Rimal started. ' : ''}Park on level ground and press <b>Calibrate</b> so the unit’s mounting angle reads as 0°. Works with the screen upright, tilted or flat.</p>
     <div class="btns" style="margin-bottom:14px"><button class="primary" data-a="cal">Calibrate (set level)</button><button class="btn" data-a="toggle">${S.showTilt ? 'Hide' : 'Show'} gauges on map</button></div>
     <div class="field"><label>Pitch warning</label>${segHtml('pitchWarn', [[20, '20°'], [25, '25°'], [30, '30°'], [35, '35°'], [40, '40°']])}</div>
     <div class="field"><label>Roll warning</label>${segHtml('rollWarn', [[15, '15°'], [20, '20°'], [25, '25°'], [30, '30°'], [35, '35°']])}</div>`, {
-    cal: () => { S.tiltCal = attitude.calibrate(); store.saveSetting('tiltCal', S.tiltCal); toast('Level set'); tiltSheet(); },
+    cal: () => { if (!attitude.available) return toast('No motion sensor readings yet'); S.tiltCal = attitude.calibrate(); store.saveSetting('tiltCal', S.tiltCal); toast('Level set — this mounting now reads 0°'); tiltSheet(); },
     toggle: () => { setS('showTilt', !S.showTilt); $('tilt').hidden = !S.showTilt; tiltSheet(); },
     set: (id) => { const [k, v] = id.split(':'); setS(k, +v); tiltSheet(); },
   });
@@ -1271,7 +1271,7 @@ async function boot() {
   map.addControl(new maplibregl.ScaleControl({ unit: S.units === 'imperial' ? 'imperial' : 'metric' }), 'bottom-left');
   map.once('style.load', () => { applyTerrain(); refreshOverlays(); });
   updateNoMapHint();
-  window.__rimal = { map, state, S, gps, tiles, packs, store, native, checkUpdates, setS, applyStyle, stopRecording, startRoute, startGoto, refreshWeather };
+  window.__rimal = { map, state, S, gps, tiles, packs, store, native, checkUpdates, setS, applyStyle, stopRecording, startRoute, startGoto, refreshWeather, attitude };
 
   // Log map errors as readable text (default handler prints "[object Object]" in Android logs).
   map.on('error', (e) => console.warn('MapError', e.sourceId || '', e.error?.message || String(e.error)));
@@ -1331,7 +1331,7 @@ async function boot() {
   $('bFollow').classList.add('on');
 
   renderFields();
-  attitude.cal = S.tiltCal || { pitch: 0, roll: 0 };
+  attitude.setCalibration(S.tiltCal);
   attitude.start();
   $('tilt').hidden = true; // shown once the sensor reports
   await restoreLive();

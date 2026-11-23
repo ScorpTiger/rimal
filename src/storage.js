@@ -80,7 +80,7 @@ export const DEFAULTS = {
   speedAlert: 0,            // km/h (0 = off)
   pitchWarn: 30,
   rollWarn: 25,
-  tiltCal: { pitch: 0, roll: 0 },
+  tiltCal: null,
   sunsetWarn: true,
   showTilt: true,
   showFuelRing: true,
