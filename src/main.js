@@ -1267,7 +1267,7 @@ async function boot() {
   map.addControl(new maplibregl.ScaleControl({ unit: S.units === 'imperial' ? 'imperial' : 'metric' }), 'bottom-left');
   map.once('style.load', () => { applyTerrain(); refreshOverlays(); });
   updateNoMapHint();
-  window.__rimal = { map, state, S, gps, tiles, checkUpdates };
+  window.__rimal = { map, state, S, gps, tiles, packs, store, native, checkUpdates, setS, applyStyle, stopRecording, startRoute, startGoto };
 
   map.on('dragstart', (e) => { if (e.originalEvent) unfollow(); });
   map.on('rotate', () => { $('bCompass').querySelector('svg').style.transform = `rotate(${-map.getBearing()}deg)`; });
