@@ -30,8 +30,11 @@ jobs:
           cd android && chmod +x gradlew && ./gradlew assembleDebug --no-daemon
           cp app/build/outputs/apk/debug/app-debug.apk ../Rimal-OffRoad.apk
 
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+
       - name: Test tools
-        run: pip install playwright==1.48.0
+        run: pip install playwright
 
       - name: Enable KVM
         run: |
