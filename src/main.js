@@ -303,7 +303,8 @@ function installedVersions() {
   return v;
 }
 const fmtVer = (v) => (v && v !== '00000000' ? `${v.slice(6, 8)}/${v.slice(4, 6)}/${v.slice(0, 4)}` : 'imported');
-function setUpdateMsg(m) { if (m) act.log('update', m); state.update.msg = m; const el = $('updState'); el.textContent = m; el.hidden = !m; updateNoMapHint(); }
+let lastUpdLog = '', lastUpdAt = 0;
+function setUpdateMsg(m) { const key = (m || '').replace(/[\d.,]+/g, '#'); if (m && (key !== lastUpdLog || Date.now() - lastUpdAt > 60000)) { lastUpdLog = key; lastUpdAt = Date.now(); act.log('update', m); } state.update.msg = m; const el = $('updState'); el.textContent = m; el.hidden = !m; updateNoMapHint(); }
 
 /* =========================================================
    GPS, dashboard, sensors

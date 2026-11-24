@@ -310,10 +310,12 @@ if True:
     def _():
         ev("(async()=>{ __rimal.act.log('issue','device test flag',{x:1}); await __rimal.act.flush(); })()")
         evs = ev("(async()=>{ const e = await __rimal.act.all(); const t = {}; e.forEach(x => t[x.type] = (t[x.type]||0)+1); return t; })()")
+        errs = ev("(async()=>{ const e = await __rimal.act.all(); return [...new Set(e.filter(x => x.type==='error' || x.type==='warn').map(x => x.msg))].slice(0, 15); })()")
+        print('   activity errors/warnings:', json.dumps(errs, ensure_ascii=False)[:2000], flush=True)
         txt = ev("(async()=>{ const e = await __rimal.act.all(); return await __rimal.native.saveText('device-activity.txt', __rimal.act.toText(e)); })()")
         ls = adb('shell', 'ls', '-la', '/sdcard/Documents/Rimal/')
         ok = evs and evs.get('gps', 0) > 0 and evs.get('issue', 0) > 0 and ('device-activity.txt' in ls or txt == 'share sheet')
-        return (ok, {'types': evs, 'saved': txt})
+        return (ok, {'types': evs, 'saved': txt, 'errors': errs})
 
     @step('v3: stargazing planner + red mode')
     def _():
