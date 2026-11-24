@@ -104,6 +104,8 @@ jobs:
           size=$(stat -c%s "$f"); ls -lh "$f"
           if [ "$size" -gt 2000000000 ]; then echo "::error::$f is over 2 GB (GitHub limit). Lower the zoom."; exit 1; fi
           tag="pack-${{ matrix.kind }}-${{ steps.want.outputs.date }}"
+          # Put the date in the file name too, so a copy installed by USB is recognised as this version.
+          dated="${f%.*}-${{ steps.want.outputs.date }}.${f##*.}"; mv "$f" "$dated"; f="$dated"
           gh release delete "$tag" --yes --cleanup-tag 2>/dev/null || true
           gh release create "$tag" "$f" --title "Rimal ${{ matrix.kind }} pack ${{ steps.want.outputs.date }}" \
             --notes "Offline ${{ matrix.kind }} pack for Saudi Arabia. Installed automatically by Rimal when online, or copy to USB and use Maps → Updates & files → Import. Map data © OpenStreetMap contributors (ODbL)."

@@ -265,7 +265,9 @@ async function checkUpdates(manual = false) {
     S.lastUpdateCheck = Date.now(); store.saveSetting('lastUpdateCheck', S.lastUpdateCheck);
     state.remote = remote;
     const installed = installedVersions();
-    const todo = Object.values(remote).filter((r) => !installed[r.key] || installed[r.key][0] < r.version);
+    // A pack copied in by USB keeps the published file name (no date); it is the same file if the size matches.
+    const sameFile = (r) => Object.values(state.maps).some((m) => packs.keyOfFile(m.name, m.kind) === r.key && m.size === r.size);
+    const todo = Object.values(remote).filter((r) => (!installed[r.key] || installed[r.key][0] < r.version) && !sameFile(r));
     if (!todo.length) { setUpdateMsg(''); if (manual) toast('Maps are up to date'); return; }
     let changed = false;
     for (const item of todo) {
