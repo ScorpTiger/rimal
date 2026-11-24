@@ -35,6 +35,12 @@ jobs:
       - name: Sync into Android project
         run: npx cap sync android
 
+      - name: Fixed signing key (keeps data when updating)
+        env:
+          KEY: ${{ secrets.RIMAL_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEY" ]; then echo "$KEY" | base64 -d > android/app/rimal.keystore; echo "Signing with the Rimal key"; else echo "::warning::RIMAL_KEYSTORE_B64 secret not set — APK signed with a temporary key, so updating needs an uninstall"; fi
+
       - name: Build APK
         working-directory: android
         run: |

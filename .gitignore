@@ -8,3 +8,4 @@ android/local.properties
 *.pmtiles
 .DS_Store
 public/maplibre-gl-worker.js
+android/app/rimal.keystore

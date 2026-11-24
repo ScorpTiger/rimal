@@ -7,8 +7,9 @@ android {
         applicationId "com.rimal.offroad"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // CI run number → every build is a newer version and installs over the previous one.
+        versionCode 100 + (System.getenv("GITHUB_RUN_NUMBER") ?: "0").toInteger()
+        versionName "3.0." + (System.getenv("GITHUB_RUN_NUMBER") ?: "0")
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,7 +17,22 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // One fixed signing key (from the RIMAL_KEYSTORE_B64 repository secret) so a new build installs
+    // over the old one and keeps trips, settings and the installed maps. Without it, Android's
+    // default per-machine debug key is used and updates need an uninstall first.
+    def rimalKey = file('rimal.keystore')
+    signingConfigs {
+        rimal {
+            storeFile rimalKey
+            storePassword System.getenv("RIMAL_KEY_PASS") ?: "rimalkey2026"
+            keyAlias "rimal"
+            keyPassword System.getenv("RIMAL_KEY_PASS") ?: "rimalkey2026"
+        }
+    }
     buildTypes {
+        debug {
+            if (rimalKey.exists()) signingConfig signingConfigs.rimal
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
