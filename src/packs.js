@@ -9,7 +9,16 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import { FileTransfer } from '@capacitor/file-transfer';
 import * as store from './storage.js';
 
-export const KINDS = { map: 'Street & track map', terrain: 'Terrain (3D, hillshade, contours)', satellite: 'Satellite imagery', poi: 'Places & POIs (search)' };
+export const KINDS = { map: 'Street & track map', terrain: 'Terrain (3D, hillshade, contours)', satellite: 'Satellite overview (zoom 10)', poi: 'Places & POIs (search)' };
+const REGIONS = { nw: 'north-west', ne: 'north-east', sw: 'south-west', se: 'south-east' };
+/** Human label for a pack key such as "map" or "satellite-nw". */
+export function label(key) {
+  const [kind, region] = key.split('-');
+  if (kind === 'satellite' && region) return `Satellite, ${REGIONS[region] || region} KSA (zoom 13)`;
+  return KINDS[kind] || key;
+}
+/** Pack key from a stored file name: ksa-satellite-nw-20261124.pmtiles → satellite-nw */
+export const keyOfFile = (name, kind) => (/^ksa-/.test(name) ? name.replace(/^ksa-/, '').replace(/-\d{8}.*$/, '').replace(/^vector$/, 'map') : kind === 'vector' ? 'map' : kind);
 export const KEEP_VERSIONS = 2;
 
 export const versionOf = (name) => (name.match(/(\d{8})/) || [])[1] || '00000000';
@@ -35,13 +44,14 @@ export async function listRemote(repo, token) {
   const releases = await r.json();
   const newest = {};
   for (const rel of releases) {
-    const m = rel.tag_name.match(/^pack-(map|terrain|satellite|poi)-(\d{8})/);
+    const m = rel.tag_name.match(/^pack-(map|terrain|satellite|poi)(?:-([a-z]{2}))?-(\d{8})/);
     if (!m || rel.draft) continue;
     const asset = rel.assets.find((a) => /\.(pmtiles|json)$/.test(a.name));
     if (!asset) continue;
-    const [, kind, version] = m;
-    if (!newest[kind] || newest[kind].version < version) {
-      newest[kind] = { kind, version, size: asset.size, name: asset.name, url: token ? asset.url : asset.browser_download_url, notes: rel.name, published: rel.published_at };
+    const [, kind, region, version] = m;
+    const key = region ? `${kind}-${region}` : kind;
+    if (!newest[key] || newest[key].version < version) {
+      newest[key] = { key, kind, region, version, size: asset.size, name: asset.name, url: token ? asset.url : asset.browser_download_url, notes: rel.name, published: rel.published_at };
     }
   }
   return newest;
@@ -50,7 +60,7 @@ export async function listRemote(repo, token) {
 /** Download one pack version into on-device storage. Returns the stored file name. */
 export async function download(item, token, onProgress, signal) {
   const ext = item.name.endsWith('.json') ? 'json' : 'pmtiles';
-  const file = `ksa-${item.kind}-${item.version}.${ext}`;
+  const file = `ksa-${item.key || item.kind}-${item.version}.${ext}`;
   let stream;
   let cleanup = async () => {};
   if (Capacitor.isNativePlatform()) {
@@ -86,8 +96,9 @@ export async function download(item, token, onProgress, signal) {
 
 /** Delete all but the newest KEEP_VERSIONS files of each kind. `files` = [{name, kind}] */
 export async function prune(files) {
+  // Group by pack (kind + region), so each regional satellite pack keeps its own previous version.
   const byKind = {};
-  for (const f of files) if (f.kind) (byKind[f.kind] ||= []).push(f);
+  for (const f of files) if (f.kind) (byKind[keyOfFile(f.name, f.kind)] ||= []).push(f);
   const removed = [];
   for (const list of Object.values(byKind)) {
     list.sort((a, b) => versionOf(b.name).localeCompare(versionOf(a.name)));

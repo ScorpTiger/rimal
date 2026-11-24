@@ -213,3 +213,6 @@ a.primary { color: #1b1208; }
 .cell { min-width: 0; overflow: hidden; }
 .cell label, .cell b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cell b { font-size: 18px; }
+
+.me.car { width: 56px; height: 84px; }
+.me.stale svg { filter: grayscale(1) opacity(.6); }

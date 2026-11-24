@@ -65,12 +65,22 @@ The feature set follows a clean-room study of Garmin Overlander / Tread Overland
    3. Connect the unit to Wi-Fi (or your phone's hotspot). The packs download and install by themselves; watch the blue line on the dashboard. Without internet, you can copy the pack files from the Releases page onto a USB stick and use *Maps → Updates & files → Import*.
 5. **Before a trip**, while you're still online, pan to where you'll drive and use **Maps → Satellite & areas → Download this area**. Zoom 15–16 suits Sentinel-2. With Esri imagery, zoom 17–18 shows individual tracks.
 
+### Install the maps from a laptop (USB), no internet needed in the car
+1. On your laptop, open **https://github.com/ScorpTiger/rimal/releases** and download:
+   - `ksa-map.pmtiles` (street & track map, ~1 GB)
+   - `ksa-terrain.pmtiles` (terrain)
+   - `ksa-poi.json` (places, fuel, water…)
+   - `ksa-satellite-nw/ne/sw/se.pmtiles` (all of KSA in satellite imagery at zoom 13, four regions; you can take only the regions you drive in)
+2. Copy them to a USB stick formatted **exFAT** or **FAT32** (every file is under 2 GB).
+3. In Rimal: **Maps → Updates & files → 📁 Import map files from USB**, select all the files at once, and wait for "Import finished".
+
 ### Pack sizes (all of KSA)
 | pack | detail | size |
 |---|---|---|
 | Street & track map | zoom 15 | about 0.5–1.5 GB |
 | Terrain | zoom 10 (contours ~every 20–50 m; area downloads go to zoom 12) | about 150–300 MB |
 | Satellite overview | zoom 10 (~150 m per pixel) | about 80–150 MB |
+| Satellite, all of KSA in 4 regions | zoom 13 (~17 m per pixel, close to Sentinel-2's native 10 m) | about 3 GB in total |
 | Places & POIs | — | about 3–10 MB |
 
 High-detail imagery comes from **area downloads**, not the country-wide pack. One 50 × 50 km area at zoom 16 is about 25–40 MB.

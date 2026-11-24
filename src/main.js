@@ -12,6 +12,7 @@ import { GPS } from './gps.js';
 import { parseGPX, toGPX } from './gpx.js';
 import { native } from './native.js';
 import { Attitude, gaugeSVG } from './sensors.js';
+import { CRUISER_SVG, ARROW_SVG } from './vehicle.js';
 import { sunTimes, hhmm, weather, WX, POI_CATS, setPOIs, poiCount, nearest, search as poiSearch, poiGeoJSON, profileSVG } from './extras.js';
 import {
   distance, bearing, destination, cardinal, fmtDist, fmtSpeed, speedUnit, fmtAlt, fmtDuration, fmtCoord,
@@ -68,6 +69,8 @@ function hybridize(lyr) {
   const out = [];
   for (const l of lyr) {
     if (l.type === 'symbol') {
+      // Lite mode: only place names and road names — POI/building/water labels cost the most to draw.
+      if (S.lite && !(l.id.startsWith('places') || l.id.startsWith('roads'))) continue;
       out.push({ ...l, paint: { ...l.paint, 'text-color': '#ffffff', 'text-halo-color': 'rgba(0,0,0,0.85)', 'text-halo-width': 1.6 } });
     } else if (l.type === 'line' && (l.id.startsWith('roads') || l.id.startsWith('boundaries'))) {
       if (l.id.includes('rail') || l.id.includes('runway') || l.id.includes('taxiway')) continue;
@@ -191,7 +194,7 @@ function refreshOverlays() {
   if (!src('saved')) return;
   src('saved').setData(fc(S.showSavedTracks ? state.tracks.filter((t) => t.visible !== false).map(trackFeature) : []));
   const r = state.rec;
-  src('current').setData(fc(r.points.length > 1 ? [line(r.points)] : []));
+  src('current').setData(fc(currentFeatures(r)));
   src('wpts').setData(fc(S.showWaypoints ? state.waypoints.map((w) => ({ type: 'Feature', properties: { id: w.id, name: w.name, color: w.color || '#e8a33d', alert: w.alertRadius || 0 }, geometry: { type: 'Point', coordinates: [w.lon, w.lat] } })) : []));
   src('navroute').setData(fc(state.nav?.route ? [line(state.nav.route)] : []));
   src('pois').setData(S.showPois ? poiGeoJSON() : fc([]));
@@ -243,7 +246,7 @@ async function checkUpdates(manual = false) {
   if (state.update.busy) return manual && toast('Already updating…');
   if (!S.updateRepo) { if (manual) toast('Set the map update source first (Maps → Updates)'); return; }
   if (!manual && !packs.connectionOk(S.autoUpdate)) return;
-  if (manual) tiles.resetOnline();
+  tiles.resetOnline(); // a slow satellite tile shouldn't block the update check
   if (!tiles.isOnline()) { if (manual) toast('No internet — keeping your current offline maps'); return; }
   state.update.busy = true; setUpdateMsg('Checking for map updates…');
   try {
@@ -251,11 +254,11 @@ async function checkUpdates(manual = false) {
     S.lastUpdateCheck = Date.now(); store.saveSetting('lastUpdateCheck', S.lastUpdateCheck);
     state.remote = remote;
     const installed = installedVersions();
-    const todo = Object.values(remote).filter((r) => !installed[r.kind] || installed[r.kind][0] < r.version);
+    const todo = Object.values(remote).filter((r) => !installed[r.key] || installed[r.key][0] < r.version);
     if (!todo.length) { setUpdateMsg(''); if (manual) toast('Maps are up to date'); return; }
     let changed = false;
     for (const item of todo) {
-      const label = packs.KINDS[item.kind];
+      const label = packs.label(item.key);
       try {
         setUpdateMsg(`Downloading ${label} (${item.version})…`);
         const file = await packs.download(item, S.updateToken, (p) => setUpdateMsg(`Updating ${label}: ${Math.round(p * 100)}%`));
@@ -283,7 +286,7 @@ async function checkUpdates(manual = false) {
 }
 function installedVersions() {
   const v = {};
-  for (const m of Object.values(state.maps)) { const k = m.kind === 'vector' ? 'map' : m.kind; (v[k] ||= []).push(m.version); }
+  for (const m of Object.values(state.maps)) { const k = packs.keyOfFile(m.name, m.kind); (v[k] ||= []).push(m.version); }
   if (state.poiVersion) v.poi = [state.poiVersion];
   for (const k in v) v[k].sort().reverse();
   return v;
@@ -302,6 +305,7 @@ function setGpsPill(text, cls) { const p = $('gpsState'); p.textContent = text; 
 
 function onFix(f) {
   noteFix(f);
+  if (!marks.firstFix) marks.firstFix = Math.round(performance.now());
   const wasFirst = !state.fix;
   state.fix = f;
   clearTimeout(staleTimer);
@@ -311,8 +315,8 @@ function onFix(f) {
 
   if (!meMarker) {
     const el = document.createElement('div');
-    el.className = 'me';
-    el.innerHTML = '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="46" fill="rgba(47,155,255,.22)"/><path d="M50 8 L80 84 L50 66 L20 84 Z" fill="#2f9bff" stroke="#fff" stroke-width="6" stroke-linejoin="round"/></svg>';
+    el.className = S.vehicleIcon === 'arrow' ? 'me' : 'me car';
+    el.innerHTML = S.vehicleIcon === 'arrow' ? ARROW_SVG : CRUISER_SVG;
     meMarker = new maplibregl.Marker({ element: el, rotationAlignment: 'map', pitchAlignment: 'map' }).setLngLat([f.lon, f.lat]).addTo(map);
   }
   meMarker.setLngLat([f.lon, f.lat]);
@@ -323,7 +327,7 @@ function onFix(f) {
     if (lastOdo) { const d = distance(lastOdo, [f.lon, f.lat]); if (d > 5 && d < 2000) { S.odometer += d; lastOdo = [f.lon, f.lat]; } }
     else lastOdo = [f.lon, f.lat];
   }
-  if (Date.now() - lastGroundAt > 5000) {
+  if (Date.now() - lastGroundAt > (S.lite ? 30000 : 5000)) {
     lastGroundAt = Date.now();
     tiles.elevationAt(f.lon, f.lat).then((e) => { state.ground = e; }).catch(() => {});
   }
@@ -464,38 +468,51 @@ function fuelSheet() {
 /* =========================================================
    Trips (track recording)
    ========================================================= */
+const GAP_SECONDS = 120;      // a longer GPS gap starts a new segment (no straight line across it)
+const GAP_METRES = 1000;      // …and so does a jump this large
+function currentFeatures(r) {
+  const starts = r.segStarts && r.segStarts.length ? r.segStarts : [0];
+  return starts.map((s0, i) => r.points.slice(s0, starts[i + 1] ?? r.points.length)).filter((p) => p.length > 1).map((p) => line(p));
+}
 function recordFix(f) {
   const r = state.rec;
   if (f.acc > 60) return;
+  // Right after the GPS wakes up the first positions can be far off: wait for a decent one.
+  if (!state.gpsSettled) { if (f.acc > 50 && (state.goodFixes = 0) === 0) return; if ((state.goodFixes = (state.goodFixes || 0) + 1) < 3) return; state.gpsSettled = true; }
   if (r.autoHold && f.speed < 0.5) r.autoHold = false;
   if (!r.active && S.autoRecord && !r.autoHold && f.speed > 2.5) startRecording(true);
   if (!r.active || r.paused) return;
   const p = [+f.lon.toFixed(7), +f.lat.toFixed(7), f.alt != null ? +f.alt.toFixed(1) : null, f.t];
   const last = r.points[r.points.length - 1];
+  r.segStarts ||= [0];
   if (last) {
     const d = distance(last, p);
     const dt = (p[3] - last[3]) / 1000;
-    if (d < S.minPointDist && dt < 30) return;
-    if (dt > 0 && d / dt > 90) return; // GPS glitch
-    r.dist += d;
-    if (f.speed > 0.8 && dt < 120) r.moving += dt;
-    if (p[2] != null && last[2] != null && p[2] > last[2]) r.ascent += p[2] - last[2];
+    if (dt > GAP_SECONDS || (d > GAP_METRES && dt > 0 && d / dt > 70)) {
+      r.segStarts.push(r.points.length); // new segment: don't draw or count a line across the gap
+    } else {
+      if (d < S.minPointDist && dt < 30) return;
+      if (dt > 0 && d / dt > 90) return; // GPS glitch
+      r.dist += d;
+      if (f.speed > 0.8 && dt < 120) r.moving += dt;
+      if (p[2] != null && last[2] != null && p[2] > last[2]) r.ascent += p[2] - last[2];
+    }
   }
   if (f.speed > r.max && f.speed < 90) r.max = f.speed;
   r.points.push(p);
-  store.appendLive({ p, stats: { dist: r.dist, moving: r.moving, max: r.max, ascent: r.ascent, start: r.start, continueId: r.continueId } });
-  src('current')?.setData(fc(r.points.length > 1 ? [line(r.points)] : []));
+  store.appendLive({ p, stats: { dist: r.dist, moving: r.moving, max: r.max, ascent: r.ascent, start: r.start, continueId: r.continueId, segStarts: r.segStarts } });
+  src('current')?.setData(fc(currentFeatures(r)));
 }
 
 function startRecording(auto = false, continueId = null) {
   if (auto && S.continueTripId && state.tracks.some((t) => t.id === S.continueTripId)) continueId = S.continueTripId;
-  Object.assign(state.rec, { active: true, paused: false, points: [], dist: 0, moving: 0, max: 0, ascent: 0, start: Date.now(), continueId });
+  Object.assign(state.rec, { active: true, paused: false, points: [], segStarts: [0], dist: 0, moving: 0, max: 0, ascent: 0, start: Date.now(), continueId });
   const t = continueId && state.tracks.find((x) => x.id === continueId);
   toast(t ? `Continuing trip “${t.name}”` : auto ? 'Movement detected — recording a new trip' : 'Trip recording started');
   updateDash();
 }
 
-async function stopRecording() {
+async function stopRecording(autoName = null) {
   const r = state.rec;
   if (r.points.length < 2) {
     Object.assign(r, { active: false, paused: false, points: [], autoHold: true });
@@ -508,20 +525,23 @@ async function stopRecording() {
   if (existing) {
     t = existing;
     t.segStarts = t.segStarts || [0];
-    t.segStarts.push(t.coords.length);
+    const off = t.coords.length;
+    for (const s0 of r.segStarts || [0]) t.segStarts.push(off + s0);
     t.coords = t.coords.concat(r.points);
     const s = t.stats || {};
     t.stats = { dist: (s.dist || 0) + stats.dist, moving: (s.moving || 0) + stats.moving, max: Math.max(s.max || 0, stats.max), ascent: (s.ascent || 0) + stats.ascent, duration: (s.duration || 0) + stats.duration };
     t.end = Date.now();
   } else {
     const d = new Date(r.start || r.points[0][3] || Date.now());
-    const name = await prompt('Save trip', 'Trip name', `Trip ${d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} ${d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`);
+    const def = `Trip ${d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} ${d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`;
+    const name = autoName != null ? autoName || def : await prompt('Save trip', 'Trip name', def);
     if (name === null) return;
-    t = { id: store.uid(), kind: 'trip', name: name || 'Trip', created: r.start || Date.now(), end: Date.now(), coords: r.points, segStarts: [0], stats, notes: '', color: TRACK_COLORS[state.tracks.length % TRACK_COLORS.length], visible: true };
+    const endT = r.points.at(-1)[3] || Date.now();
+    t = { id: store.uid(), kind: 'trip', name: name || 'Trip', created: r.start || r.points[0][3] || Date.now(), end: autoName != null ? endT : Date.now(), coords: r.points, segStarts: r.segStarts?.length ? r.segStarts : [0], stats, notes: '', color: TRACK_COLORS[state.tracks.length % TRACK_COLORS.length], visible: true };
     state.tracks.push(t);
   }
   await store.put('tracks', t);
-  Object.assign(r, { active: false, paused: false, points: [], dist: 0, moving: 0, max: 0, ascent: 0, autoHold: true, continueId: null });
+  Object.assign(r, { active: false, paused: false, points: [], segStarts: [0], dist: 0, moving: 0, max: 0, ascent: 0, autoHold: autoName == null, continueId: null });
   await store.liveClear();
   refreshOverlays(); updateDash();
   toast(`Trip “${t.name}” saved · ${fmtDist(t.stats.dist, S.units)}`, 4000);
@@ -531,7 +551,18 @@ async function restoreLive() {
   const rows = await store.liveAll();
   if (!rows.length) return;
   const last = rows.at(-1).stats;
-  Object.assign(state.rec, { active: true, paused: false, points: rows.map((x) => x.p), ...last });
+  Object.assign(state.rec, { active: true, paused: false, points: rows.map((x) => x.p), segStarts: [0], ...last });
+  const lastT = rows.at(-1).p[3] || 0;
+  if (Date.now() - lastT > 30 * 60000) {
+    // The car was switched off mid-trip (e.g. yesterday). Save that drive as its own trip instead of
+    // joining it to today's with a straight line.
+    if (rows.length > 1) {
+      const d = new Date(state.rec.start || rows[0].p[3] || lastT);
+      await stopRecording(`Trip ${d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} ${d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`);
+      toast('Your last drive was saved automatically as a trip', 5000);
+    } else { Object.assign(state.rec, { active: false, points: [] }); await store.liveClear(); }
+    return;
+  }
   toast(`Resumed unsaved trip (${rows.length} points)`);
 }
 
@@ -1028,11 +1059,11 @@ async function mapsSheet() {
       <div class="field"><label>Update source (GitHub repository “owner/name”)</label><input type="text" id="uRepo" value="${esc(S.updateRepo)}" placeholder="yourname/rimal"></div>
       <div class="field"><label>Access token (only for a private repository)</label><input type="text" id="uTok" value="${S.updateToken ? '••••••••' : ''}" placeholder="optional"></div>
       <div class="field"><label>Automatic updates</label>${segHtml('autoUpdate', [['wifi', 'On Wi-Fi'], ['any', 'Any connection'], ['off', 'Off']])}</div>
-      <div class="btns" style="margin-bottom:12px"><button class="primary" data-a="check">⟳ Check for updates now</button><button class="btn" data-a="import">Import map file from USB</button></div>
+      <div class="btns" style="margin-bottom:12px"><button class="primary" data-a="check">⟳ Check for updates now</button><button class="btn" data-a="import">📁 Import map files from USB</button></div>
       <p class="note">${state.update.msg || (S.lastUpdateCheck ? 'Last checked ' + new Date(S.lastUpdateCheck).toLocaleString() : 'Not checked yet')}</p>
-      ${Object.entries(packs.KINDS).map(([k, label]) => {
+      ${[...new Set([...Object.keys(packs.KINDS), ...Object.keys(state.remote || {}), ...Object.keys(inst)])].sort().map((k) => {
         const v = inst[k] || []; const r = state.remote?.[k];
-        return `<div class="row"><div class="grow"><div class="title">${label}</div><div class="sub">${v.length ? 'In use: ' + fmtVer(v[0]) + (v[1] ? ' · backup: ' + fmtVer(v[1]) : '') : 'Not installed'}${r ? ` · latest online: ${fmtVer(r.version)} (${gb(r.size)})` : ''}</div></div></div>`;
+        return `<div class="row"><div class="grow"><div class="title">${packs.label(k)}</div><div class="sub">${v.length ? 'In use: ' + fmtVer(v[0]) + (v[1] ? ' · backup: ' + fmtVer(v[1]) : '') : 'Not installed'}${r ? ` · latest online: ${fmtVer(r.version)} (${gb(r.size)})` : ''}</div></div></div>`;
       }).join('')}
       <h3>Files on this unit</h3>
       ${files.length ? files.map((m) => `<div class="row"><div class="grow"><div class="title">${esc(m.name)}</div><div class="sub">${m.kind} · zoom ${m.minZoom}–${m.maxZoom} · ${gb(m.size)}${S.baseMap === m.name ? ' · <b>ACTIVE</b>' : ''}</div></div>${m.kind === 'vector' && S.baseMap !== m.name ? `<button class="btn sm" data-a="usebase" data-id="${m.name}">Use</button>` : ''}<button class="btn sm danger" data-a="mdel" data-id="${m.name}">✕</button></div>`).join('') : '<div class="empty">No offline map files yet</div>'}
@@ -1055,7 +1086,7 @@ async function mapsSheet() {
       await store.del('areas', id); state.areas = others; mapsSheet();
     },
     check: () => { saveUpdateFields(); checkUpdates(true); mapsSheet(); },
-    import: () => pickFile('.pmtiles,application/octet-stream,*/*', importMapFile, false),
+    import: () => pickFile('.pmtiles,.json,application/octet-stream,*/*', importMapFiles, true),
     usebase: (id) => { S.autoBase = false; store.saveSetting('autoBase', false); setS('baseMap', id, true); mapsSheet(); },
     mdel: async (id) => {
       if (!(await confirmBox(`Delete map file “${esc(id)}” from this unit?`))) return;
@@ -1130,18 +1161,37 @@ async function runAreaDownload(area, refresh) {
   mapsTab = 'imagery'; mapsSheet(); updateNoMapHint();
 }
 
-async function importMapFile([file]) {
-  if (!file) return;
-  if (!/\.pmtiles$/i.test(file.name) && !(await confirmBox(`“${esc(file.name)}” is not a .pmtiles file. MBTiles must be converted first (see guide). Try anyway?`))) return;
-  openSheet('Importing map', '<div class="progress" id="iProg"><div></div></div><p class="note">Copying into the app so it works without the USB stick…</p>');
-  const res = await store.importMapFile(file, (p) => { const bar = document.querySelector('#iProg > div'); if (bar) bar.style.width = `${p * 100}%`; });
-  try {
-    const meta = await registerMap(res.name);
-    await loadMaps(); applyStyle();
-    const b = meta.bounds; unfollow(); map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: 20, duration: 0 });
-    toast(res.persisted ? `“${res.name}” installed for offline use (${meta.kind})` : 'Map loaded for this session only — not enough storage to keep a copy', 6000);
-  } catch (e) { await store.deleteMapFile(res.name); toast(`Could not read map file: ${e.message}`, 6000); }
-  mapsTab = 'updates'; mapsSheet();
+async function importMapFiles(files) {
+  files = files.filter(Boolean);
+  if (!files.length) return;
+  const okExt = (f) => /\.(pmtiles|json)$/i.test(f.name);
+  const bad = files.filter((f) => !okExt(f));
+  if (bad.length && !(await confirmBox(`${bad.map((f) => esc(f.name)).join(', ')} ${bad.length > 1 ? 'are' : 'is'} not a .pmtiles or .json map file. MBTiles must be converted first (see guide). Try anyway?`))) return;
+  const done = [], failed = [];
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    openSheet('Importing maps', `<p><b>${i + 1} of ${files.length}:</b> ${esc(file.name)} (${gb(file.size)})</p><div class="progress" id="iProg"><div></div></div><p class="note">Copying into the app so it works without the USB stick. Large files take a few minutes — keep Rimal open.</p>`);
+    const bar = (p) => { const b = document.querySelector('#iProg > div'); if (b) b.style.width = `${p * 100}%`; };
+    try {
+      if (/\.json$/i.test(file.name)) {
+        const data = JSON.parse(await file.text());
+        if (!Array.isArray(data) || !Array.isArray(data[0])) throw new Error('not a Rimal places file');
+        const version = packs.versionOf(file.name) !== '00000000' ? packs.versionOf(file.name) : new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        await store.put('kv', { version, data }, `poi:${version}`);
+        bar(1); done.push(`${file.name} (${data.length.toLocaleString()} places)`);
+        continue;
+      }
+      const res = await store.importMapFile(file, bar);
+      const meta = await registerMap(res.name);
+      if (!res.persisted) failed.push(`${file.name}: not enough storage — loaded for this session only`);
+      else done.push(`${file.name} (${meta.kind})`);
+    } catch (e) {
+      failed.push(`${file.name}: ${e.message}`);
+      await store.deleteMapFile(file.name.replace(/[^\w.\-]+/g, '_')).catch(() => {});
+    }
+  }
+  await loadMaps(); applyStyle(); updateNoMapHint();
+  openSheet('Import finished', `${done.length ? `<p>✅ Installed:</p><ul>${done.map((d) => `<li>${esc(d)}</li>`).join('')}</ul>` : ''}${failed.length ? `<p class="warnbox">${failed.map(esc).join('<br>')}</p>` : ''}<p class="note">You can remove the USB stick now.</p><div class="btns"><button class="primary" data-a="ok">OK</button></div>`, { ok: () => { mapsTab = 'updates'; mapsSheet(); } });
 }
 
 /* ---------- Tools ---------- */
@@ -1242,13 +1292,19 @@ function settingsSheet() {
     <div class="field"><label>Arrival radius</label>${segHtml('arrivalRadius', [[25, '25 m'], [50, '50 m'], [100, '100 m'], [250, '250 m']])}</div>
     <div class="field"><label>Speed alert</label>${segHtml('speedAlert', [[0, 'Off'], [60, '60'], [80, '80'], [100, '100'], [120, '120'], [140, '140 km/h']])}</div>
     <div class="field"><label>Track detail (point spacing)</label>${segHtml('minPointDist', [[3, 'High · 3 m'], [8, 'Normal · 8 m'], [20, 'Low · 20 m']])}</div>
+    <div class="field"><label>Position icon</label>${segHtml('vehicleIcon', [['cruiser', '🚙 My Land Cruiser'], ['arrow', '➤ Arrow']])}</div>
+    <label class="toggle"><span><b>Lite mode</b> — faster on car screens (fewer labels, no contours or 3D, lower drawing resolution)</span><input type="checkbox" id="sLite" ${S.lite ? 'checked' : ''}></label>
     <label class="toggle"><span>Auto-record a trip when the car starts moving</span><input type="checkbox" id="sAuto" ${S.autoRecord ? 'checked' : ''}></label>
     <label class="toggle"><span>Demo GPS (simulated drive — for trying the app indoors)</span><input type="checkbox" id="sDemo" ${S.demoGps ? 'checked' : ''}></label>
     <p class="note">Tip: tap any data box on the left to choose what it shows.</p>
     <p class="note" style="margin-top:16px">Rimal Off-Road Navigator v2.0 · Map data © OpenStreetMap contributors · Imagery: ${tiles.satSource().attribution.replace(/<[^>]+>/g, '')} · Terrain: Mapzen/AWS · Weather: Open-Meteo.</p>`, {
-    set: (id) => { const [k, v] = id.split(':'); setS(k, isNaN(+v) ? v : +v); updateDash(); settingsSheet(); },
+    set: (id) => {
+      const [k, v] = id.split(':'); setS(k, isNaN(+v) ? v : +v); updateDash(); settingsSheet();
+      if (k === 'vehicleIcon' && meMarker) { const el = meMarker.getElement(); el.className = v === 'arrow' ? 'me' : 'me car'; el.innerHTML = v === 'arrow' ? ARROW_SVG : CRUISER_SVG; }
+    },
   });
   $('sAuto').onchange = (e) => setS('autoRecord', e.target.checked);
+  $('sLite').onchange = (e) => { setS('lite', e.target.checked); if (e.target.checked) { setS('contours', false); setS('hillshade', false); setS('terrain3d', false); } toast('Restarting map…'); setTimeout(() => location.reload(), 600); };
   $('sDemo').onchange = (e) => { setS('demoGps', e.target.checked); gps.start(S.demoGps); toast(S.demoGps ? 'Demo GPS on' : 'Using real GPS'); };
 }
 
@@ -1287,24 +1343,40 @@ function checkEngine() {
 
 const withTimeout = (p, ms, label, fallback) => Promise.race([p, new Promise((r) => setTimeout(() => { console.warn(`${label} took over ${ms / 1000}s — continuing without it`); r(fallback); }, ms))]);
 
+const marks = { start: Math.round(performance.now()) };
+window.__rimalMarks = marks;
 async function boot() {
   state.engineOk = checkEngine();
   S = await withTimeout(store.loadSettings(), 8000, 'Loading settings', { ...store.DEFAULTS });
+  marks.settings = Math.round(performance.now());
+  // One-time switch to the faster setup after the first field test on a head unit (Android 10, slow GPU).
+  if (!S.liteMigrated) {
+    for (const [k, v] of Object.entries({ lite: true, contours: false, hillshade: false, terrain3d: false, lang: 'en', liteMigrated: true })) { S[k] = v; store.saveSetting(k, v); }
+  }
   if (!S.updateRepo && import.meta.env.VITE_UPDATE_REPO) { S.updateRepo = import.meta.env.VITE_UPDATE_REPO; store.saveSetting('updateRepo', S.updateRepo); }
   document.body.classList.toggle('night', !!S.night);
   tiles.configure({ satSource: S.satSource, customUrl: S.customSatUrl, cacheWhileBrowsing: S.cacheWhileBrowsing });
   [state.tracks, state.waypoints, state.areas] = await withTimeout(Promise.all([store.getAll('tracks'), store.getAll('waypoints'), store.getAll('areas')]), 8000, 'Loading trips', [[], [], []]);
+  marks.trips = Math.round(performance.now());
   await withTimeout(loadMaps(), 12000, 'Opening offline maps', null);
+  marks.maps = Math.round(performance.now());
 
   map = new maplibregl.Map({
     container: 'map', style: buildStyle(), center: S.lastView.center, zoom: S.lastView.zoom,
     attributionControl: { compact: true }, maxPitch: 75, dragRotate: true, fadeDuration: 0,
     cancelPendingTileRequestsWhileZooming: true,
+    // Lite mode: draw at up to 1.25x pixel density (head-unit GPUs are slow) and keep fewer tiles in memory.
+    pixelRatio: S.lite ? Math.min(window.devicePixelRatio || 1, 1.25) : window.devicePixelRatio || 1,
+    maxTileCacheSize: S.lite ? 120 : null,
+    antialias: !S.lite,
   });
+  marks.mapCreated = Math.round(performance.now());
+  map.once('load', () => { marks.mapLoaded = Math.round(performance.now()); });
+  map.once('idle', () => { marks.firstIdle = Math.round(performance.now()); console.log('RIMAL_TIMING ' + JSON.stringify(marks)); });
   map.addControl(new maplibregl.ScaleControl({ unit: S.units === 'imperial' ? 'imperial' : 'metric' }), 'bottom-left');
   map.once('style.load', () => { applyTerrain(); refreshOverlays(); });
   updateNoMapHint();
-  window.__rimal = { map, state, S, gps, tiles, packs, store, native, checkUpdates, setS, applyStyle, stopRecording, startRoute, startGoto, refreshWeather, attitude, buildReport: (note) => buildReport({ state, S, map, tiles, attitude, native }, note) };
+  window.__rimal = { map, state, S, gps, tiles, packs, store, native, checkUpdates, setS, applyStyle, stopRecording, startRoute, startGoto, refreshWeather, attitude, buildReport: (note) => buildReport({ state, S, map, tiles, attitude, native }, note), marks };
 
   // Log map errors as readable text (default handler prints "[object Object]" in Android logs).
   map.on('error', (e) => console.warn('MapError', e.sourceId || '', e.error?.message || String(e.error)));
@@ -1380,6 +1452,8 @@ async function boot() {
 
   // Automatic map updates: shortly after start, whenever the connection comes back, and every 6 hours.
   setTimeout(() => checkUpdates(false), 8000);
+  // Keep trying every 2 minutes until one check has succeeded (slow hotspot at start-up).
+  const retry = setInterval(() => { if (S.lastUpdateCheck && Date.now() - S.lastUpdateCheck < 6 * 3600e3) return clearInterval(retry); checkUpdates(false); }, 120000);
   window.addEventListener('online', () => { tiles.resetOnline(); setTimeout(() => checkUpdates(false), 3000); refreshWeather(); updateNoMapHint(); });
   window.addEventListener('offline', updateNoMapHint);
   setInterval(() => { if (Date.now() - S.lastUpdateCheck > 6 * 3600e3) checkUpdates(false); refreshWeather(); }, 15 * 60000);

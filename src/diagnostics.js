@@ -63,7 +63,7 @@ export async function buildReport(app, note) {
       update: { repo: S.updateRepo, policy: S.autoUpdate, lastCheck: S.lastUpdateCheck ? new Date(S.lastUpdateCheck).toISOString() : null, lastError: state.update.lastError || null },
     },
     storage: est ? { usedMB: Math.round(est.usage / 1e6), quotaMB: Math.round(est.quota / 1e6) } : null,
-    performance: { fps: await frameRate(), zoom: +map.getZoom().toFixed(1), jsHeapMB: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : null, uptimeMin: Math.round(performance.now() / 60000) },
+    performance: { startupMs: window.__rimalMarks || null, lite: S.lite, fps: await frameRate(), zoom: +map.getZoom().toFixed(1), jsHeapMB: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : null, uptimeMin: Math.round(performance.now() / 60000) },
     data: { trips: state.tracks.filter((t) => (t.kind || 'trip') === 'trip').length, routes: state.tracks.filter((t) => t.kind === 'route').length, waypoints: state.waypoints.length, recording: state.rec.active ? state.rec.points.length : 0 },
     settings: { units: S.units, lang: S.lang, night: S.night, fields: S.fields, autoRecord: S.autoRecord },
     log: log.slice(-150),
@@ -74,7 +74,7 @@ export function summary(r) {
   return [
     `${r.app.platform} · build ${r.app.build}`,
     `Engine: ${(r.device.userAgent.match(/(Chrome|Version)\/[\d.]+/) || ['?'])[0]} · GPU: ${r.device.gpu.renderer || '—'}`,
-    `Screen ${r.device.screen} · ${r.performance.fps} fps`,
+    `Screen ${r.device.screen} · ${r.performance.fps} fps · map ready ${r.performance.startupMs?.firstIdle ? (r.performance.startupMs.firstIdle / 1000).toFixed(1) + ' s' : '—'}`,
     `GPS: ${r.gps.fixes} fixes · first fix ${r.gps.firstFixSeconds ?? '—'} s · avg ±${r.gps.avgAccuracyM ?? '—'} m · gaps ${r.gps.gapsOver5s}`,
     `Motion sensor: ${r.sensors.motionAvailable ? 'yes' : 'no'} · Maps: ${r.maps.files.length} files · ${r.maps.cachedTiles ?? 0} tiles`,
     `Errors logged: ${r.log.filter((l) => l.level !== 'warn').length} · warnings: ${r.log.filter((l) => l.level === 'warn').length}`,

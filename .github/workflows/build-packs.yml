@@ -9,8 +9,8 @@ on:
   workflow_dispatch:
     inputs:
       packs:
-        description: "Which packs to build (comma separated: map,terrain,satellite,poi)"
-        default: "map,terrain,satellite,poi"
+        description: "Which packs to build (comma separated: map,terrain,satellite,poi,satellite-nw,satellite-ne,satellite-sw,satellite-se)"
+        default: "map,terrain,poi"
       map_maxzoom:
         description: "Street map max zoom (15 = full detail, 14 = about half the size)"
         default: "15"
@@ -23,7 +23,8 @@ permissions:
 
 env:
   BBOX: "34.4,16.2,55.8,32.3"
-  PACKS: ${{ github.event.inputs.packs || 'map,terrain,satellite,poi' }}
+  # Monthly: fresh OpenStreetMap data. Satellite imagery changes yearly — build it on demand only.
+  PACKS: ${{ github.event.inputs.packs || 'map,terrain,poi' }}
   MAP_MAXZOOM: ${{ github.event.inputs.map_maxzoom || '15' }}
   RASTER_MAXZOOM: ${{ github.event.inputs.raster_maxzoom || '10' }}
 
@@ -33,8 +34,19 @@ jobs:
     timeout-minutes: 340
     strategy:
       fail-fast: false
+      max-parallel: 3   # be gentle with the free imagery server
       matrix:
-        kind: [map, terrain, satellite, poi]
+        include:
+          - { kind: map }
+          - { kind: terrain }
+          - { kind: poi }
+          - { kind: satellite }
+          # Whole-KSA imagery at zoom 13 (~17 m/px, close to Sentinel-2's native 10 m), split in four
+          # regions so each file stays under GitHub's 2 GB release limit.
+          - { kind: satellite-nw, bbox: "34.4,24.25,45.1,32.3", zoom: "13" }
+          - { kind: satellite-ne, bbox: "45.1,24.25,55.8,32.3", zoom: "13" }
+          - { kind: satellite-sw, bbox: "34.4,16.2,45.1,24.25", zoom: "13" }
+          - { kind: satellite-se, bbox: "45.1,16.2,55.8,24.25", zoom: "13" }
     steps:
       - uses: actions/checkout@v4
 
@@ -47,6 +59,7 @@ jobs:
       - uses: actions/setup-python@v5
         if: steps.want.outputs.go == '1' && matrix.kind != 'map'
         with: { python-version: "3.12" }
+
 
       - name: Install Python tools
         if: steps.want.outputs.go == '1' && matrix.kind != 'map'
@@ -75,6 +88,10 @@ jobs:
         if: steps.want.outputs.go == '1' && matrix.kind == 'satellite'
         run: python scripts/build_raster_pack.py --kind satellite --out ksa-satellite.pmtiles --maxzoom "$RASTER_MAXZOOM" --bbox "$BBOX"
 
+      - name: Build regional satellite pack (zoom 13)
+        if: steps.want.outputs.go == '1' && startsWith(matrix.kind, 'satellite-')
+        run: python scripts/build_raster_pack.py --kind satellite --out "ksa-${{ matrix.kind }}.pmtiles" --maxzoom "${{ matrix.zoom }}" --bbox "${{ matrix.bbox }}"
+
       - name: Build places & POI pack
         if: steps.want.outputs.go == '1' && matrix.kind == 'poi'
         run: python scripts/build_poi_pack.py ksa-poi.json
@@ -83,7 +100,7 @@ jobs:
         if: steps.want.outputs.go == '1'
         env: { GH_TOKEN: "${{ github.token }}" }
         run: |
-          f=$(ls ksa-${{ matrix.kind }}.* | head -1)
+          f=$(ls ksa-${{ matrix.kind }}.pmtiles ksa-${{ matrix.kind }}.json 2>/dev/null | head -1)
           size=$(stat -c%s "$f"); ls -lh "$f"
           if [ "$size" -gt 2000000000 ]; then echo "::error::$f is over 2 GB (GitHub limit). Lower the zoom."; exit 1; fi
           tag="pack-${{ matrix.kind }}-${{ steps.want.outputs.date }}"
@@ -95,5 +112,5 @@ jobs:
         if: steps.want.outputs.go == '1'
         env: { GH_TOKEN: "${{ github.token }}" }
         run: |
-          gh release list --limit 100 --json tagName --jq '.[].tagName' | grep "^pack-${{ matrix.kind }}-" | sort -r | tail -n +4 | \
+          gh release list --limit 100 --json tagName --jq '.[].tagName' | grep -E "^pack-${{ matrix.kind }}-[0-9]{8}" | sort -r | tail -n +4 | \
             while read t; do gh release delete "$t" --yes --cleanup-tag; done
