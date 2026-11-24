@@ -52,6 +52,14 @@ The feature set follows a clean-room study of Garmin Overlander / Tread Overland
 
 ---
 
+### New in v3
+- **Activity recorder** (Settings & tools → 📜 Activity log): a 14-day log on the unit of taps, screens, GPS quality and dropouts, map/download errors, navigation, recordings, freezes, frame rate, memory and battery. Tap **🐞 Flag issue** the moment something goes wrong; export the log afterwards (Documents/Rimal) and send it for analysis. Nothing leaves the device.
+- **Stargazing**: astronomical darkness, Moon phase, rise and set, the Moon-free window, Milky Way core timing, a 10-night outlook and a red night-vision screen.
+- **Fuel log**: fill-ups with litres and price → L/100 km between full tanks, cost per km and your measured range on a full tank.
+- **Trip checklist** with Rimal's own checks (maps installed, weather saved, GPS fix) and a water calculator.
+- **Gaia GPS import**: in Gaia, export a track, route, waypoint or a whole folder as GPX, KML or GeoJSON (a folder export arrives as a .zip). In Rimal: Trips → Import and pick the file — .gpx, .kml, .kmz, .geojson and .zip are all accepted, several at once.
+- **Extreme-heat warning** from the saved forecast, and **desert tracks** from OpenStreetMap drawn as orange dashes on the imagery.
+
 ## Setup (one time, about 30 minutes)
 
 1. **Make a GitHub repository.** Create a free account and a new **public** repository (for example `rimal`), then upload this folder's contents to it.
