@@ -231,3 +231,6 @@ a.primary { color: #1b1208; }
 body.redmode::after { content: ''; position: fixed; inset: 0; background: #ff0000; mix-blend-mode: multiply; pointer-events: none; z-index: 99999; }
 body.redmode::before { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,.35); pointer-events: none; z-index: 99998; }
 @media (max-width: 700px) { .nights { grid-template-columns: repeat(3, 1fr); } }
+/* WebKit (iPad) composites the WebGL map above later siblings that have no z-index — keep panels on top explicitly. */
+#map { z-index: 0; }
+#dash, #tools { z-index: 2; }
