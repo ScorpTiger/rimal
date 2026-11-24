@@ -18,7 +18,7 @@ export function label(key) {
   return KINDS[kind] || key;
 }
 /** Pack key from a stored file name: ksa-satellite-nw-20261124.pmtiles → satellite-nw */
-export const keyOfFile = (name, kind) => (/^ksa-/.test(name) ? name.replace(/^ksa-/, '').replace(/-\d{8}.*$/, '').replace(/^vector$/, 'map') : kind === 'vector' ? 'map' : kind);
+export const keyOfFile = (name, kind) => (/^ksa-/.test(name) ? name.replace(/^ksa-/, '').replace(/\.(pmtiles|json)$/i, '').replace(/-\d{8}.*$/, '').replace(/^vector$/, 'map') : kind === 'vector' ? 'map' : kind);
 export const KEEP_VERSIONS = 2;
 
 export const versionOf = (name) => (name.match(/(\d{8})/) || [])[1] || '00000000';
