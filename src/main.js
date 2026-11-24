@@ -1355,7 +1355,29 @@ async function exportActivity(sessionId = null) {
 }
 
 /* ---------- Stargazing ---------- */
-function setRedMode(on) { setS('redMode', !!on); document.body.classList.toggle('redmode', !!on); }
+// Night-vision screen tints. Red keeps your eyes dark-adapted best; amber is a softer alternative.
+const TINTS = {
+  red: { c: '#ff0000', label: 'Red', note: 'best for night vision' },
+  deepred: { c: '#a00000', label: 'Deep red', note: 'darkest — for a fully dark camp' },
+  amber: { c: '#ff9500', label: 'Amber', note: 'easier to read, a little less eye-friendly' },
+  green: { c: '#22ff55', label: 'Green', note: 'night-goggle look — not good for dark adaptation' },
+};
+function applyTint() {
+  const t = TINTS[S.tint] || TINTS.red;
+  document.body.style.setProperty('--tint', t.c);
+  document.body.style.setProperty('--tint-dim', String(S.tintDim ?? 0.35));
+  document.body.classList.toggle('redmode', !!S.redMode);
+  const b = $('bTint'); if (b) { b.classList.toggle('on', !!S.redMode); b.title = `Night-vision screen (${t.label})`; }
+}
+function setRedMode(on) { setS('redMode', !!on); applyTint(); }
+function tintControls() {
+  return `<div class="field"><label>Night-vision colour</label><div class="swatches">${Object.entries(TINTS).map(([k, t]) => `<button data-a="tint" data-id="${k}" class="${S.tint === k ? 'on' : ''}" style="background:${t.c}">${t.label}<br><small>${t.note}</small></button>`).join('')}</div></div>
+    <div class="field"><label>Extra dimming</label><div class="seg">${[[0, 'None'], [0.2, 'Low'], [0.35, 'Medium'], [0.55, 'High'], [0.7, 'Max']].map(([v, l]) => `<button data-a="tdim" data-id="${v}" class="${Number(S.tintDim) === v ? 'on' : ''}">${l}</button>`).join('')}</div></div>`;
+}
+const tintHandlers = (reopen) => ({
+  tint: (k) => { setS('tint', k); if (!S.redMode) setS('redMode', true); applyTint(); reopen(); },
+  tdim: (v) => { setS('tintDim', +v); applyTint(); reopen(); },
+});
 function starsSheet() {
   const f = state.fix; const p = f ? [f.lon, f.lat] : [map.getCenter().lng, map.getCenter().lat];
   const n = planNight(p[0], p[1]);
@@ -1373,12 +1395,14 @@ function starsSheet() {
       <div class="cell"><label>Milky Way core</label><b>${n.milkyWay ? `${win(n.milkyWay)} · ${n.milkyWay.maxAlt}°` : 'not up in the dark'}</b></div>
     </div>
     <p class="note">${n.moon.name}${n.moon.rise ? ` · moonrise ${hhmm(n.moon.rise)}` : ''}${n.moon.set ? ` · moonset ${hhmm(n.moon.set)}` : ''}. “Fully dark” is astronomical night (sun 18° below the horizon).${town ? ` Nearest town: <b>${esc(town[1][3] || town[1][4])}</b>, ${fmtDist(town[0], S.units)} away — 40 km+ from big towns gives the darkest sky.` : ''}</p>
-    <label class="toggle"><span><b>Red night-vision screen</b> — keeps your eyes dark-adapted</span><input type="checkbox" id="redM" ${S.redMode ? 'checked' : ''}></label>
+    <label class="toggle"><span><b>Night-vision screen</b> — also on the ☾ map button</span><input type="checkbox" id="redM" ${S.redMode ? 'checked' : ''}></label>
+    ${tintControls()}
     <h3>Next 10 nights</h3>
     <div class="nights">${nights.map((x) => `<div class="night"><div>${x.date.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' })}</div><div class="moon">${x.moon.glyph}</div><div style="color:#ffd60a">${stars(x.score)}</div><div class="sub">${x.moonFreeHours.toFixed(1)} h${x.milkyWay ? ' · MW' : ''}</div></div>`).join('')}</div>
     <p class="note">Ratings use Moon-free dark hours — check cloud and dust in Weather. MW = Milky Way core above 10° while dark (best March–September).</p>
     <div class="btns"><button class="btn" data-a="wp">⚑ Save this spot as a stargazing site</button></div>`, {
     wp: () => addWaypoint(p[0], p[1], state.ground, 'Stargazing spot'),
+    ...tintHandlers(starsSheet),
   });
   $('redM').onchange = (e) => setRedMode(e.target.checked);
 }
@@ -1489,6 +1513,8 @@ function settingsSheet() {
     <div class="field"><label>Speed alert</label>${segHtml('speedAlert', [[0, 'Off'], [60, '60'], [80, '80'], [100, '100'], [120, '120'], [140, '140 km/h']])}</div>
     <div class="field"><label>Track detail (point spacing)</label>${segHtml('minPointDist', [[3, 'High · 3 m'], [8, 'Normal · 8 m'], [20, 'Low · 20 m']])}</div>
     <div class="field"><label>Position icon</label>${segHtml('vehicleIcon', [['cruiser', '🚙 My Land Cruiser'], ['arrow', '➤ Arrow']])}</div>
+    <label class="toggle"><span><b>Night-vision screen</b> (quick switch: ☾ button on the map)</span><input type="checkbox" id="sTintOn" ${S.redMode ? 'checked' : ''}></label>
+    ${tintControls()}
     <label class="toggle"><span><b>Lite mode</b> — faster on car screens (fewer labels, no contours or 3D, lower drawing resolution)</span><input type="checkbox" id="sLite" ${S.lite ? 'checked' : ''}></label>
     <label class="toggle"><span>Highlight desert tracks from the map (orange dashes)</span><input type="checkbox" id="sTracks" ${S.highlightTracks ? 'checked' : ''}></label>
     <label class="toggle"><span>Heat warning (45 °C and above, from the saved forecast)</span><input type="checkbox" id="sHeat" ${S.heatWarn ? 'checked' : ''}></label>
@@ -1497,12 +1523,14 @@ function settingsSheet() {
     <label class="toggle"><span>Demo GPS (simulated drive — for trying the app indoors)</span><input type="checkbox" id="sDemo" ${S.demoGps ? 'checked' : ''}></label>
     <p class="note">Tip: tap any data box on the left to choose what it shows.</p>
     <p class="note" style="margin-top:16px">Rimal Off-Road Navigator v3.0 · Map data © OpenStreetMap contributors · Imagery: ${tiles.satSource().attribution.replace(/<[^>]+>/g, '')} · Terrain: Mapzen/AWS · Weather: Open-Meteo.</p>`, {
+    ...tintHandlers(settingsSheet),
     set: (id) => {
       const [k, v] = id.split(':'); setS(k, isNaN(+v) ? v : +v); updateDash(); settingsSheet();
       if (k === 'vehicleIcon' && meMarker) { const el = meMarker.getElement(); el.className = v === 'arrow' ? 'me' : 'me car'; el.innerHTML = v === 'arrow' ? ARROW_SVG : CRUISER_SVG; }
     },
   });
   $('sAuto').onchange = (e) => setS('autoRecord', e.target.checked);
+  $('sTintOn').onchange = (e) => setRedMode(e.target.checked);
   $('sTracks').onchange = (e) => setS('highlightTracks', e.target.checked, true);
   $('sHeat').onchange = (e) => setS('heatWarn', e.target.checked);
   $('sAct').onchange = (e) => { setS('activityLog', e.target.checked); act.setEnabled(e.target.checked); };
@@ -1560,7 +1588,7 @@ async function boot() {
   act.log('app', `boot · build ${typeof __BUILD__ !== 'undefined' ? __BUILD__ : 'dev'} · ${native.platform}`, { lite: S.lite, mode: S.mapMode, demo: S.demoGps });
   if (!S.updateRepo && import.meta.env.VITE_UPDATE_REPO) { S.updateRepo = import.meta.env.VITE_UPDATE_REPO; store.saveSetting('updateRepo', S.updateRepo); }
   document.body.classList.toggle('night', !!S.night);
-  document.body.classList.toggle('redmode', !!S.redMode);
+  applyTint();
   tiles.configure({ satSource: S.satSource, customUrl: S.customSatUrl, cacheWhileBrowsing: S.cacheWhileBrowsing });
   [state.tracks, state.waypoints, state.areas] = await withTimeout(Promise.all([store.getAll('tracks'), store.getAll('waypoints'), store.getAll('areas')]), 8000, 'Loading trips', [[], [], []]);
   marks.trips = Math.round(performance.now());
@@ -1628,6 +1656,7 @@ async function boot() {
     setS('mapMode', next, true);
     toast({ hybrid: 'Satellite + roads', satellite: 'Satellite only', topo: 'Topo map' }[next]);
   };
+  $('bTint').onclick = () => { setRedMode(!S.redMode); toast(S.redMode ? `Night-vision screen: ${(TINTS[S.tint] || TINTS.red).label}` : 'Normal screen'); };
   $('bFollow').onclick = () => {
     state.follow = true; $('bFollow').classList.add('on');
     if (state.fix) map.easeTo({ center: [state.fix.lon, state.fix.lat], zoom: Math.max(map.getZoom(), 14) });

@@ -96,7 +96,9 @@ export const DEFAULTS = {
   tankL: 0,                 // fuel tank size in litres (fuel log range estimate)
   highlightTracks: true,    // draw desert tracks from the map in bright orange
   heatWarn: true,
-  redMode: false,           // night-vision red screen for stargazing
+  redMode: false,           // night-vision screen tint on/off (quick button on the map)
+  tint: 'red',              // red | deepred | amber | green
+  tintDim: 0.35,            // extra darkening on top of the tint (0-0.7)
 };
 export async function loadSettings() {
   const s = { ...DEFAULTS };

@@ -228,8 +228,12 @@ a.primary { color: #1b1208; }
 .bar div { height: 100%; background: var(--ok, #46a758); }
 .toggle.check small { opacity: .6; }
 /* Red night-vision mode: multiply everything by red, then dim. Cheap — no CSS filter on the map canvas. */
-body.redmode::after { content: ''; position: fixed; inset: 0; background: #ff0000; mix-blend-mode: multiply; pointer-events: none; z-index: 99999; }
-body.redmode::before { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,.35); pointer-events: none; z-index: 99998; }
+body.redmode::after { content: ''; position: fixed; inset: 0; background: var(--tint, #ff0000); mix-blend-mode: multiply; pointer-events: none; z-index: 99999; }
+body.redmode::before { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,var(--tint-dim, .35)); pointer-events: none; z-index: 99998; }
+#bTint.on { background: #b00000; color: #fff; }
+.swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+.swatches button { flex: 1; min-width: 120px; padding: 12px 8px; border-radius: 12px; border: 2px solid var(--line); color: #fff; font-weight: 700; text-shadow: 0 1px 2px #000; }
+.swatches button.on { border-color: #fff; box-shadow: 0 0 0 2px var(--accent); }
 @media (max-width: 700px) { .nights { grid-template-columns: repeat(3, 1fr); } }
 /* WebKit (iPad) composites the WebGL map above later siblings that have no z-index — keep panels on top explicitly. */
 #map { z-index: 0; }
