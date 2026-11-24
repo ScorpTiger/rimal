@@ -13,6 +13,9 @@ import { parseGPX, toGPX } from './gpx.js';
 import { native } from './native.js';
 import { Attitude, gaugeSVG } from './sensors.js';
 import { CRUISER_SVG, ARROW_SVG } from './vehicle.js';
+import * as act from './activity.js';
+import { planNight, nextNights } from './stars.js';
+import { fuelStats, rangeFrom, defaultChecklist, filesFromZip } from './triptools.js';
 import { sunTimes, hhmm, weather, WX, POI_CATS, setPOIs, poiCount, nearest, search as poiSearch, poiGeoJSON, profileSVG } from './extras.js';
 import {
   distance, bearing, destination, cardinal, fmtDist, fmtSpeed, speedUnit, fmtAlt, fmtDuration, fmtCoord,
@@ -20,6 +23,7 @@ import {
 } from './geo.js';
 
 const $ = (id) => document.getElementById(id);
+act.install(); // start the activity recorder before anything else can go wrong
 const esc = (s) => String(s ?? '').replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' })[c]);
 const TRACK_COLORS = ['#ff5a1f', '#2f9bff', '#c04cff', '#18b37e', '#ffd60a', '#ff3b8d', '#00c2d6'];
 
@@ -126,6 +130,13 @@ function buildStyle() {
     if (S.contours) lyr.push(contourLabels);
   }
 
+  // Desert tracks from OpenStreetMap (highway=track), drawn bright so they stand out on the imagery.
+  if (base && S.highlightTracks && S.mapMode !== 'satellite') {
+    lyr.push({ id: 'desert-tracks', type: 'line', source: 'protomaps', 'source-layer': 'roads', minzoom: 9,
+      filter: ['==', ['get', 'kind_detail'], 'track'],
+      layout: { 'line-cap': 'round' },
+      paint: { 'line-color': '#ff8a00', 'line-opacity': 0.95, 'line-dasharray': [2, 1.2], 'line-width': ['interpolate', ['linear'], ['zoom'], 9, 1, 13, 2.2, 17, 4.5] } });
+  }
   const empty = { type: 'FeatureCollection', features: [] };
   Object.assign(sources, {
     fuel: { type: 'geojson', data: empty }, saved: { type: 'geojson', data: empty }, plan: { type: 'geojson', data: empty },
@@ -292,19 +303,22 @@ function installedVersions() {
   return v;
 }
 const fmtVer = (v) => (v && v !== '00000000' ? `${v.slice(6, 8)}/${v.slice(4, 6)}/${v.slice(0, 4)}` : 'imported');
-function setUpdateMsg(m) { state.update.msg = m; const el = $('updState'); el.textContent = m; el.hidden = !m; updateNoMapHint(); }
+function setUpdateMsg(m) { if (m) act.log('update', m); state.update.msg = m; const el = $('updState'); el.textContent = m; el.hidden = !m; updateNoMapHint(); }
 
 /* =========================================================
    GPS, dashboard, sensors
    ========================================================= */
-const gps = new GPS(onFix, (msg) => { noteGpsError(msg); if (state.fix && !msg.includes('denied')) return; setGpsPill(msg.includes('denied') ? 'NO PERMISSION' : msg.includes('Waiting') ? 'SEARCHING GPS' : 'NO GPS', msg.includes('Waiting') ? 'weak' : ''); if (msg.includes('denied')) toast('Location permission denied — allow it in Android Settings → Apps → Rimal → Permissions', 8000); });
+const gps = new GPS(onFix, (msg) => { noteGpsError(msg); act.log('gps', `error: ${msg}`); if (state.fix && !msg.includes('denied')) return; setGpsPill(msg.includes('denied') ? 'NO PERMISSION' : msg.includes('Waiting') ? 'SEARCHING GPS' : 'NO GPS', msg.includes('Waiting') ? 'weak' : ''); if (msg.includes('denied')) toast('Location permission denied — allow it in Android Settings → Apps → Rimal → Permissions', 8000); });
 const attitude = new Attitude(onAttitude);
 let staleTimer, lastGroundAt = 0, lastOdo = null;
 
-function setGpsPill(text, cls) { const p = $('gpsState'); p.textContent = text; p.className = 'pill ' + cls; }
+function setGpsPill(text, cls) { const p = $('gpsState'); if (p.textContent !== text) act.log('gps', `status ${p.textContent || '—'} → ${text}`); p.textContent = text; p.className = 'pill ' + cls; }
 
+let lastGpsLog = 0;
 function onFix(f) {
   noteFix(f);
+  if (!state.fix || Date.now() - lastGpsLog > 15000) { lastGpsLog = Date.now(); act.log('gps', state.fix ? 'fix' : 'first fix', { lon: f.lon, lat: f.lat, acc: Math.round(f.acc), kmh: f.speed != null ? Math.round(f.speed * 3.6) : null, hdg: f.heading != null ? Math.round(f.heading) : null, alt: f.alt != null ? Math.round(f.alt) : null }); }
+  else if (state.fix && f.t - state.fix.t > 10000) act.log('gps', `gap of ${Math.round((f.t - state.fix.t) / 1000)} s between fixes`, { acc: Math.round(f.acc) });
   if (!marks.firstFix) marks.firstFix = Math.round(performance.now());
   const wasFirst = !state.fix;
   state.fix = f;
@@ -437,6 +451,13 @@ function checkAlerts(f) {
     }
     refreshFuelRing();
   }
+  const wx = state.weather?.data;
+  if (S.heatWarn && wx && Date.now() - state.weather.at < 12 * 3600e3) {
+    const hr = new Date().getHours(), now = wx.current?.temperature_2m, max = wx.daily?.temperature_2m_max?.[0];
+    if ((now >= 45 || (max >= 47 && hr < 15)) && once('heat' + new Date().toDateString(), 6 * 3600e3)) {
+      alertBar(`🌡 EXTREME HEAT ${Math.round(now)}°C now${max ? `, up to ${Math.round(max)}°C today` : ''} · keep revs low, watch coolant, carry extra water`); beep(2); setTimeout(hideAlert, 12000);
+    }
+  }
   if (S.sunsetWarn) {
     const s = sunTimes(f.lon, f.lat).sunset, left = s - Date.now();
     if (left > 0 && left < 45 * 60000 && once('sunset' + new Date().toDateString(), 86400000)) { alertBar(`☀ Sunset in ${Math.round(left / 60000)} min (${hhmm(s)})`, true); setTimeout(hideAlert, 8000); }
@@ -454,13 +475,14 @@ function fuelSheet() {
   const near = f ? nearest([f.lon, f.lat], 'fuel', 6) : [];
   openSheet('Fuel range', `
     <div class="field"><label>Range on a full tank</label><input type="number" id="fRange" inputmode="numeric" placeholder="e.g. 650" value="${S.fuelRange || ''}"></div>
-    <div class="btns" style="margin-bottom:12px"><button class="primary" data-a="save">Save</button><button class="btn" data-a="fill">⛽ I just filled up</button><button class="btn" data-a="ring">${S.showFuelRing ? 'Hide' : 'Show'} range rings</button></div>
+    <div class="btns" style="margin-bottom:12px"><button class="primary" data-a="save">Save</button><button class="btn" data-a="fill">⛽ I just filled up</button><button class="btn" data-a="ring">${S.showFuelRing ? 'Hide' : 'Show'} range rings</button><button class="btn" data-a="log">🧾 Fuel log</button></div>
     ${S.fuelRange ? `<p><b>${fmtDist(fuelLeft(), S.units)}</b> left since last fill-up (${fmtDist(S.odometer - S.fuelSince, S.units)} driven). The orange ring is your <b>turn-back radius</b> (half the range), red is the full range — both as the crow flies.</p>` : '<p class="note">Enter your tank range to get a low-fuel alert, the distance to the nearest station, and point-of-no-return rings.</p>'}
     <h3>Nearest fuel</h3>
     ${near.length ? near.map(([d, p], i) => `<div class="row"><div class="grow"><div class="title">${esc(p[3] || p[4] || 'Fuel station')}</div><div class="sub">${fmtDist(d, S.units)} · ${Math.round(bearing([f.lon, f.lat], p))}°</div></div><button class="primary" data-a="go" data-id="${i}">➤</button></div>`).join('') : `<div class="empty">${poiCount() ? 'No fuel stations in the POI pack nearby' : 'Install the Places & POIs pack (Maps → Updates) to find fuel offline'}</div>`}`, {
     save: () => { setS('fuelRange', +$('fRange').value || 0); if (!S.fuelSince) setS('fuelSince', S.odometer); refreshFuelRing(); fuelSheet(); },
     fill: () => { setS('fuelSince', S.odometer); toast('Fuel range reset to full'); refreshFuelRing(); fuelSheet(); },
     ring: () => { setS('showFuelRing', !S.showFuelRing); refreshFuelRing(); fuelSheet(); },
+    log: fuelLogSheet,
     go: (i) => { const p = near[+i][1]; closeSheet(); startGoto([p[0], p[1]], p[3] || 'Fuel'); },
   });
 }
@@ -506,6 +528,7 @@ function recordFix(f) {
 
 function startRecording(auto = false, continueId = null) {
   if (auto && S.continueTripId && state.tracks.some((t) => t.id === S.continueTripId)) continueId = S.continueTripId;
+  act.log('rec', auto ? 'auto-record started (movement)' : 'recording started', { continueId });
   Object.assign(state.rec, { active: true, paused: false, points: [], segStarts: [0], dist: 0, moving: 0, max: 0, ascent: 0, start: Date.now(), continueId });
   const t = continueId && state.tracks.find((x) => x.id === continueId);
   toast(t ? `Continuing trip “${t.name}”` : auto ? 'Movement detected — recording a new trip' : 'Trip recording started');
@@ -514,6 +537,7 @@ function startRecording(auto = false, continueId = null) {
 
 async function stopRecording(autoName = null) {
   const r = state.rec;
+  act.log('rec', `recording stopped${autoName ? ' (auto-saved: ' + autoName + ')' : ''}`, { points: r.points.length, km: +(r.dist / 1000).toFixed(2), segments: r.segStarts?.length });
   if (r.points.length < 2) {
     Object.assign(r, { active: false, paused: false, points: [], autoHold: true });
     await store.liveClear(); refreshOverlays(); updateDash();
@@ -603,6 +627,7 @@ function navZoom() { if (state.fix && map.getZoom() < 13) map.easeTo({ center: [
 function startGoto(target, name) {
   navZoom();
   state.nav = { kind: 'goto', name, target, arrived: false };
+  act.log('nav', `go to “${name}”`, { target });
   $('navBar').hidden = false; $('navOffWrap').hidden = true;
   refreshOverlays();
   if (state.fix) navigate(state.fix); else toast('Navigation set — waiting for GPS');
@@ -615,13 +640,14 @@ function startRoute(coords, name, reverse, label) {
   for (const p of route) if (distance(thin.at(-1), p) >= 5) thin.push(p);
   if (thin.at(-1) !== route.at(-1)) thin.push(route.at(-1));
   state.nav = { kind: 'route', name: (label || (reverse ? 'TrackBack: ' : 'Follow: ')) + name, route: thin, cum: cumulative(thin), target: thin.at(-1), hint: null, arrived: false, offAlerted: false };
+  act.log('nav', `follow route “${state.nav.name}”`, { points: thin.length, km: +(state.nav.cum.at(-1) / 1000).toFixed(1) });
   $('navBar').hidden = false; $('navOffWrap').hidden = false;
   refreshOverlays();
   navZoom();
   if (state.fix) navigate(state.fix); else map.fitBounds(bbox(thin), { padding: 60, duration: 600 });
   state.follow = true; $('bFollow').classList.add('on');
 }
-function stopNav() { state.nav = null; $('navBar').hidden = true; hideAlert(); refreshOverlays(); }
+function stopNav() { if (state.nav) act.log('nav', 'navigation stopped'); state.nav = null; $('navBar').hidden = true; hideAlert(); refreshOverlays(); }
 
 function navigate(f) {
   const n = state.nav;
@@ -655,7 +681,7 @@ function navigate(f) {
   updateNavLine();
 }
 
-function alertBar(text, ok = false) { const a = $('alertBar'); a.textContent = text; a.className = ok ? 'ok' : ''; a.hidden = false; }
+function alertBar(text, ok = false) { act.log('nav', `alert: ${text}`); const a = $('alertBar'); a.textContent = text; a.className = ok ? 'ok' : ''; a.hidden = false; }
 function hideAlert() { $('alertBar').hidden = true; }
 
 let audioCtx;
@@ -768,6 +794,7 @@ function editWaypoint(w) {
    ========================================================= */
 let sheetHandlers = {};
 function openSheet(title, html, handlers = {}) {
+  if ($('sheetTitle').textContent !== title || $('sheet').hidden) act.log('screen', `open “${title}”`);
   $('sheetTitle').textContent = title; $('sheetBody').innerHTML = html; sheetHandlers = handlers; $('sheet').hidden = false;
 }
 function closeSheet() { $('sheet').hidden = true; $('sheetBody').innerHTML = ''; sheetHandlers = {}; resolveDialog?.(null); }
@@ -799,7 +826,7 @@ function confirmBox(text) {
   });
 }
 let toastT;
-function toast(msg, ms = 3000) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => (t.hidden = true), ms); }
+function toast(msg, ms = 3000) { act.log('app', `toast: ${msg}`); const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => (t.hidden = true), ms); }
 const segHtml = (key, opts) => `<div class="seg">${opts.map(([v, l]) => `<button data-a="set" data-id="${key}:${v}" class="${String(S[key]) === String(v) ? 'on' : ''}">${l}</button>`).join('')}</div>`;
 
 /* ---------- Go To ---------- */
@@ -906,7 +933,7 @@ function tripsSheet() {
     <div class="btns" style="margin-bottom:8px"><button class="primary" data-a="import">Import GPX / KML / GeoJSON</button><button class="btn" data-a="expall">Export all (GPX)</button></div>
     ${body}`, {
     tab: (id) => { libTab = id; tripsSheet(); },
-    import: () => pickFile('.gpx,.kml,.geojson,.json,application/gpx+xml,application/xml,text/xml', importFiles, true),
+    import: () => pickFile('.gpx,.kml,.kmz,.zip,.geojson,.json,application/gpx+xml,application/xml,text/xml,application/zip', importFiles, true),
     expall: () => exportGPX({ tracks: state.tracks, waypoints: state.waypoints }, `rimal-all-${dateStamp()}.gpx`),
     open: (id) => tripDetail(state.tracks.find((x) => x.id === id)),
     wshow: (id) => { const w = state.waypoints.find((x) => x.id === id); closeSheet(); unfollow(); map.flyTo({ center: [w.lon, w.lat], zoom: Math.max(14, map.getZoom()) }); showPointPopup({ lng: w.lon, lat: w.lat }, w.name, w); },
@@ -981,9 +1008,11 @@ function parseGeoJSON(text, fileName) {
   const g = JSON.parse(text); const tracks = [], waypoints = [];
   const feats = g.type === 'FeatureCollection' ? g.features : g.type === 'Feature' ? [g] : [{ geometry: g, properties: {} }];
   for (const f of feats) {
-    const name = f.properties?.name || fileName, geom = f.geometry; if (!geom) continue;
+    const name = f.properties?.name || f.properties?.title || fileName, geom = f.geometry; if (!geom) continue; // Gaia GeoJSON uses title
     const c3 = (c) => [c[0], c[1], c[2] ?? null, null];
-    if (geom.type === 'Point') waypoints.push({ name, lon: geom.coordinates[0], lat: geom.coordinates[1], ele: geom.coordinates[2] ?? null });
+    if (geom.type === 'Point') waypoints.push({ name, lon: geom.coordinates[0], lat: geom.coordinates[1], ele: geom.coordinates[2] ?? null, notes: f.properties?.notes || f.properties?.description || '' });
+    if (geom.type === 'MultiPoint') geom.coordinates.forEach((c, i) => waypoints.push({ name: `${name} ${i + 1}`, lon: c[0], lat: c[1], ele: c[2] ?? null }));
+    if (geom.type === 'GeometryCollection') { const sub = parseGeoJSON(JSON.stringify({ type: 'FeatureCollection', features: geom.geometries.map((g) => ({ type: 'Feature', properties: f.properties, geometry: g })) }), name); tracks.push(...sub.tracks); waypoints.push(...sub.waypoints); }
     if (geom.type === 'LineString') tracks.push({ name, coords: geom.coordinates.map(c3) });
     if (geom.type === 'MultiLineString') geom.coordinates.forEach((l, i) => tracks.push({ name: `${name} ${i + 1}`, coords: l.map(c3) }));
   }
@@ -991,7 +1020,16 @@ function parseGeoJSON(text, fileName) {
 }
 async function importFiles(files) {
   let nt = 0, nw = 0;
+  // Gaia GPS "export folder" and Google Earth .kmz arrive as zip archives — unpack them first.
+  const expanded = [];
   for (const file of files) {
+    if (/\.(zip|kmz)$/i.test(file.name)) {
+      try { const inner = filesFromZip(await file.arrayBuffer()); if (!inner.length) toast(`${file.name}: no GPX/KML/GeoJSON inside`); for (const x of inner) expanded.push({ name: x.name, text: async () => x.text }); }
+      catch (e) { toast(`${file.name}: ${e.message}`); }
+    } else expanded.push(file);
+  }
+  act.log('data', `import ${expanded.length} file(s)`, expanded.map((f) => f.name).slice(0, 20));
+  for (const file of expanded) {
     try {
       const text = await file.text(), base = file.name.replace(/\.\w+$/, '');
       if (/\.json$/i.test(file.name) && text.includes('"rimalBackup"')) { await restoreBackup(JSON.parse(text)); continue; }
@@ -1198,6 +1236,11 @@ async function importMapFiles(files) {
 function toolsSheet() {
   openSheet('Settings & tools', `<div class="toolgrid">
     <button data-a="settings"><i>⚙</i>Settings</button>
+    <button data-a="flag"><i>🐞</i>Flag issue</button>
+    <button data-a="act"><i>📜</i>Activity log</button>
+    <button data-a="check"><i>✅</i>Trip checklist</button>
+    <button data-a="stars"><i>✨</i>Stargazing</button>
+    <button data-a="flog"><i>🧾</i>Fuel log</button>
     <button data-a="plan"><i>⇢</i>Route planner</button>
     <button data-a="measure"><i>📏</i>Measure</button>
     <button data-a="tilt"><i>⛰</i>Pitch &amp; roll</button>
@@ -1208,7 +1251,7 @@ function toolsSheet() {
     <button data-a="backup"><i>💾</i>Backup</button>
     <button data-a="report"><i>🧪</i>Test report</button>
   </div>`, {
-    report: reportSheet,
+    report: reportSheet, flag: flagIssue, act: () => activitySheet(), check: checklistSheet, stars: starsSheet, flog: fuelLogSheet,
     plan: () => startPlan('route'), measure: () => startPlan('measure'), tilt: tiltSheet, wx: weatherSheet, fuel: fuelSheet, sun: sunSheet,
     sos: sosSheet, settings: settingsSheet,
     backup: () => openSheet('Backup & restore', `<p class="note">Saves all trips, routes, waypoints and settings into one file (Documents/Rimal). Restore it on this or another unit via Trips → Import.</p><div class="btns"><button class="primary" data-a="b">💾 Create backup</button><button class="btn" data-a="r">Restore from file</button></div>`, { b: backup, r: () => pickFile('.json,application/json', importFiles, false) }),
@@ -1235,6 +1278,7 @@ async function weatherSheet() {
       <div class="cell"><label>Gusts</label><b style="color:${c.wind_gusts_10m > 50 ? 'var(--danger)' : ''}">${Math.round(c.wind_gusts_10m)} km/h</b></div>
       <div class="cell"><label>Visibility</label><b>${c.visibility != null ? fmtDist(c.visibility, S.units) : '—'}</b></div>
     </div>
+    ${Math.max(c.temperature_2m, ...d.temperature_2m_max.slice(0, 2)) >= 45 ? '<p class="warnbox">Extreme heat — drive in the cooler hours, watch coolant and transmission temperature, and carry at least 8 L of water per person per day.</p>' : ''}
     ${c.wind_gusts_10m > 50 ? '<p class="warnbox">Strong gusts — risk of blowing sand and low visibility.</p>' : ''}
     <h3>Next days</h3>
     ${d.time.map((t, i) => `<div class="row"><div class="grow"><div class="title">${new Date(t).toLocaleDateString(undefined, { weekday: 'long' })}</div><div class="sub">${Math.round(d.temperature_2m_min[i])}–${Math.round(d.temperature_2m_max[i])}°C · gusts ${Math.round(d.wind_gusts_10m_max[i])} km/h · rain ${d.precipitation_sum[i]} mm</div></div></div>`).join('')}
@@ -1263,6 +1307,157 @@ function sosSheet() {
     <p class="note">Read the coordinates to the operator. SMS works with very weak signal — try it even with one bar.</p>`, {
     wp: () => addWaypoint(f.lon, f.lat, f.alt, 'Emergency position'),
   });
+}
+
+/* ---------- Activity recorder ---------- */
+async function flagIssue() {
+  const f = state.fix;
+  const note = await prompt('Flag an issue', 'What went wrong? A few words is enough — everything around it is already recorded.', '');
+  if (note == null) return;
+  act.log('issue', note || '(flagged without a note)', { lon: f?.lon, lat: f?.lat, acc: f?.acc, zoom: +map.getZoom().toFixed(1), gps: $('gpsState').textContent, rec: state.rec.active, nav: state.nav?.name || null, mode: S.mapMode });
+  await act.flush();
+  toast('Issue flagged — saved in the activity log with everything around it', 5000);
+}
+async function activitySheet(sel = null) {
+  const list = await act.sessions();
+  const st = act.stats();
+  const fmtT = (t) => new Date(t).toLocaleString(undefined, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  let detail = '';
+  if (sel) {
+    const evs = await act.all(sel);
+    const shown = evs.filter((e) => e.type !== 'tap' && e.type !== 'screen' && !(e.type === 'gps' && e.msg === 'fix')).slice(-150).reverse();
+    const cls = { error: 'color:var(--danger)', issue: 'color:#ffd60a', warn: 'color:#ffb020' };
+    detail = `<h3>Key events in this session (newest first)</h3><div class="actlog">${shown.map((e) => `<div style="${cls[e.type] || ''}"><span>${new Date(e.t).toLocaleTimeString()}</span> <b>${e.type}</b> ${esc(e.msg)}</div>`).join('') || '<div class="empty">Nothing notable</div>'}</div>`;
+  }
+  openSheet('Activity log', `
+    <p class="note">Rimal records what happens while you drive — taps, screens, GPS quality and dropouts, map and download problems, navigation, recordings, app speed and every error — on this unit only, for 14 days. Nothing is sent anywhere. When something goes wrong tap <b>🐞 Flag issue</b>; later <b>Export</b> and send the file to Claude.</p>
+    <label class="toggle"><span>Record activity</span><input type="checkbox" id="aOn" ${S.activityLog !== false ? 'checked' : ''}></label>
+    <div class="btns" style="margin:10px 0"><button class="primary" data-a="flag">🐞 Flag issue now</button><button class="btn" data-a="exp">⤓ Export all</button><button class="btn" data-a="clr">Clear</button></div>
+    <p class="note">This session: ${st.total} events · ${st.error} errors · ${st.warn} warnings · ${st.issue} flagged</p>
+    <h3>Sessions</h3>
+    ${list.length ? list.slice(0, 30).map((x) => `<div class="row"><div class="grow"><div class="title">${fmtT(x.from)} → ${new Date(x.to).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}${x.id === st.session ? ' · now' : ''}</div><div class="sub">${x.n} events · <span style="color:${x.errors ? 'var(--danger)' : 'inherit'}">${x.errors} errors</span> · ${x.warns} warnings${x.issues ? ` · <b style="color:#ffd60a">${x.issues} flagged</b>` : ''}</div></div><button class="btn" data-a="view" data-id="${x.id}">View</button><button class="btn" data-a="one" data-id="${x.id}">⤓</button></div>`).join('') : '<div class="empty">No activity recorded yet</div>'}
+    ${detail}`, {
+    flag: flagIssue,
+    view: (id) => activitySheet(id),
+    exp: () => exportActivity(),
+    one: (id) => exportActivity(id),
+    clr: async () => { if (await confirmBox('Delete the whole activity log?')) { await act.clearAll(); toast('Activity log cleared'); activitySheet(); } },
+  });
+  $('aOn').onchange = (e) => { setS('activityLog', e.target.checked); act.setEnabled(e.target.checked); };
+}
+async function exportActivity(sessionId = null) {
+  const evs = await act.all(sessionId);
+  const head = `Rimal activity log · exported ${new Date().toISOString()} · build ${typeof __BUILD__ !== 'undefined' ? __BUILD__ : 'dev'} · ${navigator.userAgent}\n`;
+  const name = `rimal-activity-${sessionId || 'all'}-${dateStamp()}.txt`;
+  const where = await native.saveText(name, head + act.toText(evs));
+  toast(where ? `Saved ${evs.length} events to ${where}` : `Exported ${evs.length} events`, 6000);
+}
+
+/* ---------- Stargazing ---------- */
+function setRedMode(on) { setS('redMode', !!on); document.body.classList.toggle('redmode', !!on); }
+function starsSheet() {
+  const f = state.fix; const p = f ? [f.lon, f.lat] : [map.getCenter().lng, map.getCenter().lat];
+  const n = planNight(p[0], p[1]);
+  const town = nearest(p, 'place', 1)[0];
+  const nights = nextNights(p[0], p[1], 10);
+  const stars = (sc) => { const n = Math.round(sc / 2); return `<span title="${sc}/10">${'★'.repeat(n)}<span style="opacity:.22">${'★'.repeat(5 - n)}</span></span>`; };
+  const win = (w) => (w ? `${hhmm(new Date(w.from))} – ${hhmm(new Date(w.to))}` : '—');
+  openSheet('Stargazing', `
+    <div class="grid stats">
+      <div class="cell"><label>Tonight</label><b style="color:#ffd60a">${stars(n.score)}</b></div>
+      <div class="cell"><label>Moon</label><b>${n.moon.glyph} ${Math.round(n.moon.fraction * 100)}%</b></div>
+      <div class="cell"><label>Fully dark</label><b>${hhmm(n.darkStart)} – ${hhmm(n.darkEnd)}</b></div>
+      <div class="cell"><label>Moon-free dark</label><b>${n.moonFreeHours.toFixed(1)} h</b></div>
+      <div class="cell"><label>Best window</label><b>${win(n.bestWindow)}</b></div>
+      <div class="cell"><label>Milky Way core</label><b>${n.milkyWay ? `${win(n.milkyWay)} · ${n.milkyWay.maxAlt}°` : 'not up in the dark'}</b></div>
+    </div>
+    <p class="note">${n.moon.name}${n.moon.rise ? ` · moonrise ${hhmm(n.moon.rise)}` : ''}${n.moon.set ? ` · moonset ${hhmm(n.moon.set)}` : ''}. “Fully dark” is astronomical night (sun 18° below the horizon).${town ? ` Nearest town: <b>${esc(town[1][3] || town[1][4])}</b>, ${fmtDist(town[0], S.units)} away — 40 km+ from big towns gives the darkest sky.` : ''}</p>
+    <label class="toggle"><span><b>Red night-vision screen</b> — keeps your eyes dark-adapted</span><input type="checkbox" id="redM" ${S.redMode ? 'checked' : ''}></label>
+    <h3>Next 10 nights</h3>
+    <div class="nights">${nights.map((x) => `<div class="night"><div>${x.date.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' })}</div><div class="moon">${x.moon.glyph}</div><div style="color:#ffd60a">${stars(x.score)}</div><div class="sub">${x.moonFreeHours.toFixed(1)} h${x.milkyWay ? ' · MW' : ''}</div></div>`).join('')}</div>
+    <p class="note">Ratings use Moon-free dark hours — check cloud and dust in Weather. MW = Milky Way core above 10° while dark (best March–September).</p>
+    <div class="btns"><button class="btn" data-a="wp">⚑ Save this spot as a stargazing site</button></div>`, {
+    wp: () => addWaypoint(p[0], p[1], state.ground, 'Stargazing spot'),
+  });
+  $('redM').onchange = (e) => setRedMode(e.target.checked);
+}
+
+/* ---------- Fuel log ---------- */
+async function fuelLogSheet() {
+  const log = (await store.get('kv', 'fuellog')) || [];
+  const st = fuelStats(log);
+  const last = [...log].sort((a, b) => b.odo - a.odo)[0];
+  const odoGuess = last ? Math.round(last.odo + (S.odometer - (last.gpsOdo ?? S.odometer)) / 1000) : '';
+  const est = rangeFrom(S.tankL, st.avgL100);
+  const legOf = (x) => st.legs.find((l) => l.to.id === x.id);
+  openSheet('Fuel log', `
+    <div class="grid stats">
+      <div class="cell"><label>Average</label><b>${st.avgL100 ? st.avgL100.toFixed(1) + ' L/100km' : '—'}</b></div>
+      <div class="cell"><label>Last tank</label><b>${st.lastL100 ? st.lastL100.toFixed(1) + ' L/100km' : '—'}</b></div>
+      <div class="cell"><label>Cost per km</label><b>${st.costPerKm ? st.costPerKm.toFixed(2) + ' SAR' : '—'}</b></div>
+      <div class="cell"><label>Price / litre</label><b>${st.pricePerLitre ? st.pricePerLitre.toFixed(2) + ' SAR' : '—'}</b></div>
+      <div class="cell"><label>Total fuel</label><b>${Math.round(st.litres)} L</b></div>
+      <div class="cell"><label>Total spend</label><b>${Math.round(st.spend)} SAR</b></div>
+    </div>
+    <div class="field"><label>Tank size in litres (for the range estimate)</label><input type="number" id="fTank" inputmode="decimal" placeholder="main + sub tank" value="${S.tankL || ''}"></div>
+    ${est ? `<p class="note">Measured range on a full tank: <b>${est} km</b>. <button class="btn" data-a="userange">Use it for the range rings</button></p>` : ''}
+    <h3>Add a fill-up</h3>
+    <div class="grid2">
+      <div class="field"><label>Odometer (km)</label><input type="number" id="fOdo" inputmode="numeric" value="${odoGuess}"></div>
+      <div class="field"><label>Litres</label><input type="number" id="fL" inputmode="decimal"></div>
+      <div class="field"><label>Total paid (SAR)</label><input type="number" id="fP" inputmode="decimal"></div>
+      <div class="field"><label>Note</label><input type="text" id="fN" placeholder="station, 91/95…"></div>
+    </div>
+    <label class="toggle"><span>Filled to the top (needed to measure consumption)</span><input type="checkbox" id="fFull" checked></label>
+    <div class="btns"><button class="primary" data-a="add">⛽ Save fill-up</button><button class="btn" data-a="back">Fuel range</button></div>
+    <h3>History</h3>
+    ${log.length ? [...log].sort((a, b) => b.t - a.t).map((x) => `<div class="row"><div class="grow"><div class="title">${new Date(x.t).toLocaleDateString()} · ${x.litres} L${x.price ? ` · ${x.price} SAR` : ''}${x.full ? '' : ' · partial'}</div><div class="sub">${x.odo} km${x.note ? ' · ' + esc(x.note) : ''}${legOf(x) ? ` · ${legOf(x).l100.toFixed(1)} L/100km` : ''}</div></div><button class="btn" data-a="del" data-id="${x.id}">✕</button></div>`).join('') : '<div class="empty">No fill-ups yet. Add one each time you refuel — after two full tanks you get your real consumption.</div>'}`, {
+    add: async () => {
+      const odo = +$('fOdo').value, litres = +$('fL').value;
+      if (!odo || !litres) return toast('Enter the odometer and litres');
+      const e = { id: store.uid(), t: Date.now(), odo, litres, price: +$('fP').value || 0, full: $('fFull').checked, note: $('fN').value.trim(), lon: state.fix?.lon, lat: state.fix?.lat, gpsOdo: S.odometer };
+      log.push(e); await store.put('kv', log, 'fuellog');
+      act.log('data', 'fuel fill-up saved', { odo, litres, full: e.full });
+      if (e.full) setS('fuelSince', S.odometer);
+      refreshFuelRing(); toast('Fill-up saved'); fuelLogSheet();
+    },
+    del: async (id) => { const i = log.findIndex((x) => x.id === id); if (i >= 0 && (await confirmBox('Delete this fill-up?'))) { log.splice(i, 1); await store.put('kv', log, 'fuellog'); } fuelLogSheet(); },
+    userange: () => { setS('fuelRange', est); refreshFuelRing(); toast(`Fuel range set to ${est} km`); fuelLogSheet(); },
+    back: fuelSheet,
+  });
+  $('fTank').onchange = (e) => { setS('tankL', +e.target.value || 0); fuelLogSheet(); };
+}
+
+/* ---------- Trip-prep checklist ---------- */
+async function checklistSheet() {
+  let list = (await store.get('kv', 'checklist')) || defaultChecklist();
+  const save = () => store.put('kv', list, 'checklist');
+  // Items Rimal can check by itself.
+  const auto = {
+    'Navigation (Rimal)-0': Object.values(state.maps).some((m) => m.kind === 'vector') || state.areas.length > 0,
+    'Navigation (Rimal)-2': !!state.weather && Date.now() - state.weather.at < 24 * 3600e3,
+    'Navigation (Rimal)-3': !!state.fix && !S.demoGps && state.fix.acc <= 30,
+  };
+  for (const it of list) if (auto[it.id]) it.done = true;
+  const done = list.filter((x) => x.done).length;
+  const groups = [...new Set(list.map((x) => x.group))];
+  const people = S.tripPeople || 2, days = S.tripDays || 2;
+  const maxT = state.weather?.data?.daily ? Math.round(Math.max(...state.weather.data.daily.temperature_2m_max)) : null;
+  const perDay = maxT != null && maxT >= 40 ? 8 : 5;
+  openSheet('Trip checklist', `
+    <div class="bar"><div style="width:${Math.round((done / list.length) * 100)}%"></div></div>
+    <p class="note">${done} of ${list.length} ready${auto['Navigation (Rimal)-0'] ? '' : ' · <b>no offline map installed yet</b>'}</p>
+    <div class="grid2"><div class="field"><label>People</label><input type="number" id="cP" value="${people}" inputmode="numeric"></div><div class="field"><label>Days</label><input type="number" id="cD" value="${days}" inputmode="numeric"></div></div>
+    <p class="note">Water to carry: <b>${people * perDay * (days + 1)} L</b> (${perDay} L per person per day + a spare day${maxT != null ? ` · forecast max ${maxT}°C` : ''}).</p>
+    ${groups.map((g) => `<h3>${esc(g)}</h3>${list.filter((x) => x.group === g).map((x) => `<label class="toggle check"><span>${esc(x.text)}${auto[x.id] ? ' <small>(checked by Rimal)</small>' : ''}</span><input type="checkbox" data-ck="${esc(x.id)}" ${x.done ? 'checked' : ''}></label>`).join('')}`).join('')}
+    <div class="btns" style="margin-top:12px"><button class="btn" data-a="addi">+ Add item</button><button class="btn" data-a="reset">Untick all (new trip)</button><button class="btn" data-a="defaults">Restore default list</button></div>`, {
+    addi: async () => { const t = await prompt('Add checklist item', 'Item', ''); if (t) { list.push({ id: 'my-' + store.uid(), group: 'My items', text: t, done: false }); await save(); } checklistSheet(); },
+    reset: async () => { list.forEach((x) => (x.done = false)); await save(); checklistSheet(); },
+    defaults: async () => { if (await confirmBox('Replace the list with the default items?')) { list = defaultChecklist(); await save(); } checklistSheet(); },
+  });
+  $('sheetBody').querySelectorAll('[data-ck]').forEach((el) => (el.onchange = () => { const it = list.find((x) => x.id === el.dataset.ck); it.done = el.checked; save(); }));
+  $('cP').onchange = (e) => { setS('tripPeople', Math.max(1, +e.target.value || 1)); checklistSheet(); };
+  $('cD').onchange = (e) => { setS('tripDays', Math.max(1, +e.target.value || 1)); checklistSheet(); };
 }
 
 /* ---------- Field-test report ---------- */
@@ -1294,21 +1489,28 @@ function settingsSheet() {
     <div class="field"><label>Track detail (point spacing)</label>${segHtml('minPointDist', [[3, 'High · 3 m'], [8, 'Normal · 8 m'], [20, 'Low · 20 m']])}</div>
     <div class="field"><label>Position icon</label>${segHtml('vehicleIcon', [['cruiser', '🚙 My Land Cruiser'], ['arrow', '➤ Arrow']])}</div>
     <label class="toggle"><span><b>Lite mode</b> — faster on car screens (fewer labels, no contours or 3D, lower drawing resolution)</span><input type="checkbox" id="sLite" ${S.lite ? 'checked' : ''}></label>
+    <label class="toggle"><span>Highlight desert tracks from the map (orange dashes)</span><input type="checkbox" id="sTracks" ${S.highlightTracks ? 'checked' : ''}></label>
+    <label class="toggle"><span>Heat warning (45 °C and above, from the saved forecast)</span><input type="checkbox" id="sHeat" ${S.heatWarn ? 'checked' : ''}></label>
+    <label class="toggle"><span>Activity recorder (for finding bugs — stays on this unit)</span><input type="checkbox" id="sAct" ${S.activityLog !== false ? 'checked' : ''}></label>
     <label class="toggle"><span>Auto-record a trip when the car starts moving</span><input type="checkbox" id="sAuto" ${S.autoRecord ? 'checked' : ''}></label>
     <label class="toggle"><span>Demo GPS (simulated drive — for trying the app indoors)</span><input type="checkbox" id="sDemo" ${S.demoGps ? 'checked' : ''}></label>
     <p class="note">Tip: tap any data box on the left to choose what it shows.</p>
-    <p class="note" style="margin-top:16px">Rimal Off-Road Navigator v2.0 · Map data © OpenStreetMap contributors · Imagery: ${tiles.satSource().attribution.replace(/<[^>]+>/g, '')} · Terrain: Mapzen/AWS · Weather: Open-Meteo.</p>`, {
+    <p class="note" style="margin-top:16px">Rimal Off-Road Navigator v3.0 · Map data © OpenStreetMap contributors · Imagery: ${tiles.satSource().attribution.replace(/<[^>]+>/g, '')} · Terrain: Mapzen/AWS · Weather: Open-Meteo.</p>`, {
     set: (id) => {
       const [k, v] = id.split(':'); setS(k, isNaN(+v) ? v : +v); updateDash(); settingsSheet();
       if (k === 'vehicleIcon' && meMarker) { const el = meMarker.getElement(); el.className = v === 'arrow' ? 'me' : 'me car'; el.innerHTML = v === 'arrow' ? ARROW_SVG : CRUISER_SVG; }
     },
   });
   $('sAuto').onchange = (e) => setS('autoRecord', e.target.checked);
+  $('sTracks').onchange = (e) => setS('highlightTracks', e.target.checked, true);
+  $('sHeat').onchange = (e) => setS('heatWarn', e.target.checked);
+  $('sAct').onchange = (e) => { setS('activityLog', e.target.checked); act.setEnabled(e.target.checked); };
   $('sLite').onchange = (e) => { setS('lite', e.target.checked); if (e.target.checked) { setS('contours', false); setS('hillshade', false); setS('terrain3d', false); } toast('Restarting map…'); setTimeout(() => location.reload(), 600); };
   $('sDemo').onchange = (e) => { setS('demoGps', e.target.checked); gps.start(S.demoGps); toast(S.demoGps ? 'Demo GPS on' : 'Using real GPS'); };
 }
 
 function setS(k, v, restyle = false) {
+  if (!['lastView', 'odometer', 'lastUpdateCheck', 'checklist'].includes(k)) act.log('data', `setting ${k} = ${typeof v === 'object' ? JSON.stringify(v)?.slice(0, 80) : k.toLowerCase().includes('token') ? '***' : v}`);
   S[k] = v; store.saveSetting(k, v);
   document.body.classList.toggle('night', !!S.night);
   if (restyle) applyStyle();
@@ -1353,8 +1555,11 @@ async function boot() {
   if (!S.liteMigrated) {
     for (const [k, v] of Object.entries({ lite: true, contours: false, hillshade: false, terrain3d: false, lang: 'en', liteMigrated: true })) { S[k] = v; store.saveSetting(k, v); }
   }
+  act.setEnabled(S.activityLog !== false);
+  act.log('app', `boot · build ${typeof __BUILD__ !== 'undefined' ? __BUILD__ : 'dev'} · ${native.platform}`, { lite: S.lite, mode: S.mapMode, demo: S.demoGps });
   if (!S.updateRepo && import.meta.env.VITE_UPDATE_REPO) { S.updateRepo = import.meta.env.VITE_UPDATE_REPO; store.saveSetting('updateRepo', S.updateRepo); }
   document.body.classList.toggle('night', !!S.night);
+  document.body.classList.toggle('redmode', !!S.redMode);
   tiles.configure({ satSource: S.satSource, customUrl: S.customSatUrl, cacheWhileBrowsing: S.cacheWhileBrowsing });
   [state.tracks, state.waypoints, state.areas] = await withTimeout(Promise.all([store.getAll('tracks'), store.getAll('waypoints'), store.getAll('areas')]), 8000, 'Loading trips', [[], [], []]);
   marks.trips = Math.round(performance.now());
@@ -1376,10 +1581,12 @@ async function boot() {
   map.addControl(new maplibregl.ScaleControl({ unit: S.units === 'imperial' ? 'imperial' : 'metric' }), 'bottom-left');
   map.once('style.load', () => { applyTerrain(); refreshOverlays(); });
   updateNoMapHint();
-  window.__rimal = { map, state, S, gps, tiles, packs, store, native, checkUpdates, setS, applyStyle, stopRecording, startRoute, startGoto, refreshWeather, attitude, buildReport: (note) => buildReport({ state, S, map, tiles, attitude, native }, note), marks };
+  window.__rimal = { act, planNight, map, state, S, gps, tiles, packs, store, native, checkUpdates, setS, applyStyle, stopRecording, startRoute, startGoto, refreshWeather, attitude, buildReport: (note) => buildReport({ state, S, map, tiles, attitude, native }, note), marks };
 
   // Log map errors as readable text (default handler prints "[object Object]" in Android logs).
-  map.on('error', (e) => console.warn('MapError', e.sourceId || '', e.error?.message || String(e.error)));
+  let mapErrs = 0;
+  map.on('error', (e) => { if (++mapErrs <= 50 || mapErrs % 100 === 0) act.log('map', `error ${e.sourceId || ''}: ${e.error?.message || String(e.error)}`, { n: mapErrs }); console.warn('MapError', e.sourceId || '', e.error?.message || String(e.error)); });
+  map.once('idle', () => act.log('perf', 'startup timings (ms)', marks));
   map.on('dragstart', (e) => { if (e.originalEvent) unfollow(); });
   map.on('rotate', () => { $('bCompass').querySelector('svg').style.transform = `rotate(${-map.getBearing()}deg)`; });
   map.on('moveend', () => { const c = map.getCenter(); S.lastView = { center: [c.lng, c.lat], zoom: map.getZoom() }; store.saveSetting('lastView', S.lastView); });
@@ -1445,6 +1652,7 @@ async function boot() {
   setInterval(() => { updateDash(); store.saveSetting('odometer', S.odometer); }, 5000);
   native.keepAwake();
   gps.start(S.demoGps);
+  act.startHeartbeat(() => ({ zoom: +map.getZoom().toFixed(1), follow: state.follow, rec: state.rec.active ? state.rec.points.length : 0, nav: !!state.nav, online: tiles.isOnline(), gps: $('gpsState').textContent, acc: state.fix ? Math.round(state.fix.acc) : null, fixAgeS: state.fix ? Math.round((Date.now() - state.fix.t) / 1000) : null }));
 
   // Status line for automated device tests (Android logcat / iOS console).
   const status = () => console.log('RIMAL_STATUS ' + JSON.stringify({ platform: native.platform, engine: state.engineOk, webgl2: !!document.createElement('canvas').getContext('webgl2'), opfs: !!navigator.storage?.getDirectory, fix: state.fix && [+state.fix.lon.toFixed(4), +state.fix.lat.toFixed(4), state.fix.acc], maps: Object.keys(state.maps).length, styleLoaded: map.isStyleLoaded(), zoom: +map.getZoom().toFixed(1), sensor: attitude.available }));

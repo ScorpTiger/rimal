@@ -92,6 +92,11 @@ export const DEFAULTS = {
   lastView: { center: [45.0, 23.8], zoom: 5 },
   baseMap: null,
   satMap: null,
+  activityLog: true,        // on-device activity recorder for finding bugs
+  tankL: 0,                 // fuel tank size in litres (fuel log range estimate)
+  highlightTracks: true,    // draw desert tracks from the map in bright orange
+  heatWarn: true,
+  redMode: false,           // night-vision red screen for stargazing
 };
 export async function loadSettings() {
   const s = { ...DEFAULTS };

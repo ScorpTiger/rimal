@@ -288,6 +288,28 @@ if True:
     def _():
         n = ev("__rimal.state.tracks.length"); return (bool(n) and n >= 1, ev("__rimal.state.tracks.map(t=>t.name)"))
 
+    @step('v3: desert tracks highlighted from the real KSA map (Red Sands)')
+    def _():
+        ev("__rimal.setS('mapMode','hybrid',true); __rimal.map.jumpTo({center:[46.55,24.35], zoom:13})")
+        time.sleep(10); shot('v3-desert-tracks')
+        n = ev("(__rimal.map.getLayer('desert-tracks') ? __rimal.map.queryRenderedFeatures({layers:['desert-tracks']}).length : -1)")
+        return (n is not None and n >= 0, {'tracks_on_screen': n})
+
+    @step('v3: activity recorder — events, flagged issue, export to Documents/Rimal')
+    def _():
+        ev("(async()=>{ __rimal.act.log('issue','device test flag',{x:1}); await __rimal.act.flush(); })()")
+        evs = ev("(async()=>{ const e = await __rimal.act.all(); const t = {}; e.forEach(x => t[x.type] = (t[x.type]||0)+1); return t; })()")
+        txt = ev("(async()=>{ const e = await __rimal.act.all(); return await __rimal.native.saveText('device-activity.txt', __rimal.act.toText(e)); })()")
+        ls = adb('shell', 'ls', '-la', '/sdcard/Documents/Rimal/')
+        ok = evs and evs.get('gps', 0) > 0 and evs.get('issue', 0) > 0 and ('device-activity.txt' in ls or txt == 'share sheet')
+        return (ok, {'types': evs, 'saved': txt})
+
+    @step('v3: stargazing planner + red mode')
+    def _():
+        n = ev("(()=>{ const n = __rimal.planNight(46.7, 24.7); return {score: n.score, moon: n.moon.name, dark: n.darkHours.toFixed(1)}; })()")
+        ev("document.body.classList.add('redmode')"); time.sleep(1); shot('v3-redmode'); ev("document.body.classList.remove('redmode')")
+        return (n and float(n['dark']) > 8, n)
+
     @step('Performance: memory and frame timing on the emulator')
     def _():
         ev("__rimal.map.jumpTo({center:[46.6753,24.7136], zoom:13})")
