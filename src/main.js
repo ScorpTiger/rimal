@@ -1657,7 +1657,8 @@ async function boot() {
 
   // Status line for automated device tests (Android logcat / iOS console).
   const status = () => console.log('RIMAL_STATUS ' + JSON.stringify({ platform: native.platform, engine: state.engineOk, webgl2: !!document.createElement('canvas').getContext('webgl2'), opfs: !!navigator.storage?.getDirectory, fix: state.fix && [+state.fix.lon.toFixed(4), +state.fix.lat.toFixed(4), state.fix.acc], maps: Object.keys(state.maps).length, styleLoaded: map.isStyleLoaded(), zoom: +map.getZoom().toFixed(1), sensor: attitude.available }));
-  setTimeout(status, 20000); setTimeout(status, 60000);
+  const layout = () => console.log('RIMAL_LAYOUT ' + JSON.stringify({ vw: innerWidth, vh: innerHeight, dpr: devicePixelRatio, portrait: matchMedia('(orientation: portrait)').matches, narrow: matchMedia('(max-width: 900px)').matches, rects: ['dash', 'tools', 'map', 'mapBtns'].map((id) => { const e = $(id); const r = e.getBoundingClientRect(); const cs = getComputedStyle(e); return [id, Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height), cs.display, cs.visibility, cs.zIndex]; }), dashW: getComputedStyle(document.documentElement).getPropertyValue('--dash-w') }));
+  setTimeout(status, 20000); setTimeout(status, 60000); setTimeout(layout, 25000);
 
   // Automatic map updates: shortly after start, whenever the connection comes back, and every 6 hours.
   setTimeout(() => checkUpdates(false), 8000);

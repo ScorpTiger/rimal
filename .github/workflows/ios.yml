@@ -27,7 +27,10 @@ jobs:
         env:
           VITE_UPDATE_REPO: ${{ github.repository }}
         run: |
-          npm ci && npm run build && npx cap sync ios
+          npm ci && npm run build
+          # Console logging on for the simulator smoke test only (the .ipa below is built with it off).
+          node -e "const f='capacitor.config.json',c=require('./'+f);c.loggingBehavior='debug';require('fs').writeFileSync(f,JSON.stringify(c,null,2))"
+          npx cap sync ios
           xcodebuild -version
 
       - name: Build for iPad simulator
@@ -51,11 +54,12 @@ jobs:
           sleep 30; xcrun simctl io "$UDID" screenshot results/01-ipad-launch.png
           xcrun simctl location "$UDID" set 24.585,46.87 || true
           sleep 40; xcrun simctl io "$UDID" screenshot results/02-ipad-after-60s.png
-          grep -E "RIMAL_STATUS|ERROR|Error|MapError|Update failed" results/app-console.txt | head -60 || true
+          grep -E "RIMAL_STATUS|RIMAL_LAYOUT|ERROR|Error|MapError|Update failed" results/app-console.txt | head -60 || true
           grep -q '"engine":true' results/app-console.txt && grep -q '"webgl2":true' results/app-console.txt && echo "iPad smoke test: engine + WebGL2 OK"
 
       - name: Build unsigned device app (.ipa)
         run: |
+          git checkout capacitor.config.json && npx cap copy ios
           xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release -sdk iphoneos \
             -derivedDataPath build/dev CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build | tail -15
           mkdir -p Payload && cp -R build/dev/Build/Products/Release-iphoneos/App.app Payload/
