@@ -43,7 +43,7 @@ const state = {
 /* =========================================================
    Map + data sources
    ========================================================= */
-const BASE = location.href.replace(/[#?].*$/, '').replace(/[^/]*$/, '');
+const BASE = new URL('.', location.href).href; // works for https://localhost/ (Android) and capacitor://localhost (iOS)
 maplibregl.setWorkerUrl(`${BASE}maplibre-gl-worker.js`);
 const pmProtocol = new Protocol({ metadata: true });
 maplibregl.addProtocol('pmtiles', pmProtocol.tile);
