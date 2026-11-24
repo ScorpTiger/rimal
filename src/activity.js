@@ -117,15 +117,17 @@ export function install() {
   setTimeout(prune, 30000);
 }
 
-// Periodic health sample (every minute): frame rate, memory, battery.
-let lastFrames = 0;
+// Periodic health sample (every minute): frame rate over 2 s, memory, battery.
+// The frame counter only runs during the 2-second sample so the app can idle the rest of the time.
+function sampleFps(ms = 2000) {
+  return new Promise((r) => { if (document.hidden) return r(null); let n = 0; const t0 = performance.now(); const f = () => { n++; performance.now() - t0 < ms ? requestAnimationFrame(f) : r(Math.round((n * 1000) / ms)); }; requestAnimationFrame(f); });
+}
 export function startHeartbeat(extra) {
-  let frames = 0; const tick = () => { frames++; requestAnimationFrame(tick); }; requestAnimationFrame(tick);
   let batt = null;
   navigator.getBattery?.().then((b) => { batt = b; }).catch(() => {});
-  setInterval(() => {
-    const fps = Math.round((frames - lastFrames) / 60); lastFrames = frames;
+  setInterval(async () => {
+    const fps = await sampleFps();
     const d = { fps, heapMB: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : undefined, battery: batt ? Math.round(batt.level * 100) + (batt.charging ? '+' : '') : undefined, ...(extra?.() || {}) };
-    log('perf', `heartbeat ${fps} fps`, d);
+    log('perf', `heartbeat ${fps ?? '-'} fps`, d);
   }, 60000);
 }

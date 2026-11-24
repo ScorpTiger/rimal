@@ -118,7 +118,17 @@ def connect(port):
         m = re.search(r'@(webview_devtools_remote_\d+)', adb('shell', 'cat', '/proc/net/unix'))
         if m: break
         time.sleep(2)
-    if not m: raise RuntimeError('no WebView devtools socket')
+    if not m:
+        # The app process is gone: keep the evidence, then relaunch it once so the remaining steps can run.
+        alive = adb('shell', 'pidof', PKG).strip()
+        n = len([f for f in os.listdir(OUT) if f.startswith('crash-')])
+        lc = adb('logcat', '-d', '-t', '3000', timeout=120)
+        open(f'{OUT}/crash-{n}.txt', 'w').write(f'pid: {alive or "NOT RUNNING"}\n' + '\n'.join(l for l in lc.splitlines() if re.search(r'rimal|chromium|AndroidRuntime|FATAL|lowmemorykiller|ActivityManager|libc|DEBUG|WebView|Capacitor', l)))
+        print(f'   app process {"alive" if alive else "DIED"} — logcat saved to crash-{n}.txt, relaunching', flush=True)
+        if n < 3:
+            adb('shell', 'monkey', '-p', PKG, '-c', 'android.intent.category.LAUNCHER', '1'); time.sleep(15)
+            return connect(port)
+        raise RuntimeError('no WebView devtools socket')
     adb('forward', '--remove', f'tcp:{port}'); adb('forward', f'tcp:{port}', f'localabstract:{m.group(1)}')
     for _ in range(20):
         try: return Page(port)
@@ -218,12 +228,13 @@ if True:
 
     @step('Topo + hillshade + contours + 3D terrain render')
     def _():
-        ev("__rimal.setS('mapMode','topo',true); __rimal.map.jumpTo({center:[45.5,22.3], zoom:11})")
+        # Lite mode turns these off by default since v2.0.17 — switch them on for this check.
+        ev("__rimal.setS('contours',true); __rimal.setS('hillshade',true); __rimal.setS('mapMode','topo',true); __rimal.map.jumpTo({center:[45.5,22.3], zoom:11})")
         time.sleep(10); shot('topo-tuwaiq')
         c = ev("__rimal.map.querySourceFeatures('contours',{sourceLayer:'contours'}).length")
         ev("__rimal.setS('terrain3d',true); __rimal.map.setTerrain({source:'dem3d',exaggeration:1.5}); __rimal.map.easeTo({pitch:65, bearing:40})")
         time.sleep(10); shot('3d-terrain')
-        ev("__rimal.setS('terrain3d',false); __rimal.map.setTerrain(null); __rimal.map.jumpTo({pitch:0,bearing:0}); __rimal.setS('mapMode','hybrid',true)")
+        ev("__rimal.setS('terrain3d',false); __rimal.map.setTerrain(null); __rimal.map.jumpTo({pitch:0,bearing:0}); __rimal.setS('contours',false); __rimal.setS('hillshade',false); __rimal.setS('mapMode','hybrid',true)")
         return (c > 0, {'contour_features': c})
 
     @step('POI pack: search + nearest fuel')
