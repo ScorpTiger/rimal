@@ -1225,12 +1225,14 @@ function areaSheet() {
   };
   openSheet('Download area for offline', `
     <p class="note">Downloads what is on screen now. Source: <b>${tiles.satSource().name}</b>.</p>
+    ${srcMax < 18 ? `<p class="warnbox" style="background:rgba(232,163,61,.12);border-color:var(--accent)">This imagery source stops at zoom ${srcMax}. For zoom 15–18 (sharp enough to see tracks and bushes) switch to Esri World Imagery (personal use). <button class="btn sm" data-a="esri">Use Esri — up to zoom 18</button></p>` : ''}
     <div class="field"><label>Name</label><input type="text" id="aName" value="Area ${state.areas.length + 1}"></div>
     <label class="toggle"><span>Satellite imagery</span><input type="checkbox" id="aSat" checked></label>
     <label class="toggle"><span>Terrain (3D, shading, contours, elevation)</span><input type="checkbox" id="aDem" checked></label>
     <div class="field" style="margin-top:10px"><label>Imagery detail (max zoom)</label><div class="seg" id="aZ">${zooms.map((v) => `<button data-z="${v}" class="${v === z ? 'on' : ''}">z${v}</button>`).join('')}</div></div>
     <p id="aEst"></p>
     <div class="btns"><button class="primary" data-a="start">⬇ Start download</button></div>`, {
+    esri: () => { setS('satSource', 'esri'); tiles.configure({ satSource: 'esri' }); applyStyle(); act.log('data', 'imagery source → esri (from area download)'); areaSheet(); },
     start: () => {
       const layers = [...($('aSat').checked ? ['sat'] : []), ...($('aDem').checked ? ['dem'] : [])];
       if (!layers.length) return;
