@@ -247,9 +247,10 @@ if True:
         r = ev("""(async()=>await __rimal.tiles.downloadArea({bbox:[46.84,24.56,46.92,24.62], layers:['sat','dem'], maxZoom:14, demMaxZoom:12}))()""")
         return (r['failed'] <= r['total'] * 0.02 and r['total'] > 50, r)
 
-    @step('Trip recording while driving (Android GPS, auto-start)')
+    @step('Trip recording while driving (Android GPS, started with the Record button)')
     def _():
-        ev("__rimal.state.follow=true"); gps_on['move'] = True
+        if ev('__rimal.state.rec.active'): return (False, 'recording started by itself — it must wait for the Record button')
+        ev("__rimal.state.follow=true"); page.click('#bRec'); gps_on['move'] = True
         wait_for('__rimal.state.rec.active && __rimal.state.rec.points.length > 15', 120, 2)
         shot('recording')
         pts = ev('__rimal.state.rec.points.length'); return (pts > 15, {'points': pts, 'dist_m': ev('Math.round(__rimal.state.rec.dist)')})
