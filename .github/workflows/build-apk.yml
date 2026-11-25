@@ -39,7 +39,13 @@ jobs:
         env:
           KEY: ${{ secrets.RIMAL_KEYSTORE_B64 }}
         run: |
-          if [ -n "$KEY" ]; then echo "$KEY" | base64 -d > android/app/rimal.keystore; echo "Signing with the Rimal key"; else echo "::warning::RIMAL_KEYSTORE_B64 secret not set — APK signed with a temporary key, so updating needs an uninstall"; fi
+          if [ -n "$KEY" ]; then
+            # Tolerate spaces / line breaks picked up when pasting the key into GitHub.
+            printf '%s' "$KEY" | tr -d ' \r\n\t' > /tmp/key.b64
+            echo "key text: $(wc -c < /tmp/key.b64) characters (expected 3528)"
+            base64 -d -i /tmp/key.b64 > android/app/rimal.keystore || { echo "::error::The RIMAL_KEYSTORE_B64 secret is not valid — paste the key again"; exit 1; }
+            echo "keystore fingerprint: $(sha256sum android/app/rimal.keystore | cut -c1-16) (expected 329456846f2293e7)"
+            echo "Signing with the Rimal key"; else echo "::warning::RIMAL_KEYSTORE_B64 secret not set — APK signed with a temporary key, so updating needs an uninstall"; fi
 
       - name: Build APK
         working-directory: android
