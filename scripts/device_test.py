@@ -126,8 +126,12 @@ def connect(port):
         except Exception as e: lc = f'logcat unavailable: {e}'
         open(f'{OUT}/crash-{n}.txt', 'w').write(f'pid: {alive or "NOT RUNNING"}\n' + '\n'.join(l for l in lc.splitlines() if re.search(r'rimal|chromium|AndroidRuntime|FATAL|lowmemorykiller|ActivityManager|libc|DEBUG|WebView|Capacitor', l)))
         print(f'   app process {"alive" if alive else "DIED"} — logcat saved to crash-{n}.txt, relaunching', flush=True)
+        try: diag = {'df': adb('shell', 'df', '-h', '/data', timeout=30)[-200:], 'mem': adb('shell', 'cat', '/proc/meminfo', timeout=30)[:200], 'am': adb('shell', 'am', 'start', '-W', '-n', f'{PKG}/.MainActivity', timeout=90)[-400:]}
+        except Exception as e: diag = {'error': str(e)}
+        print('   diagnostics:', json.dumps(diag)[:1200], flush=True)
+        open(f'{OUT}/crash-{n}.txt', 'a').write('\n\nDIAG ' + json.dumps(diag, indent=1))
         if n < 3:
-            adb('shell', 'monkey', '-p', PKG, '-c', 'android.intent.category.LAUNCHER', '1'); time.sleep(15)
+            time.sleep(15)
             return connect(port)
         raise RuntimeError('no WebView devtools socket')
     adb('forward', '--remove', f'tcp:{port}'); adb('forward', f'tcp:{port}', f'localabstract:{m.group(1)}')
@@ -278,8 +282,8 @@ if True:
         adb('shell', 'cmd', 'connectivity', 'airplane-mode', 'enable'); adb('shell', 'svc', 'wifi', 'disable'); adb('shell', 'svc', 'data', 'disable')
         time.sleep(6)
         adb('shell', 'am', 'force-stop', PKG); time.sleep(2)
-        adb('shell', 'monkey', '-p', PKG, '-c', 'android.intent.category.LAUNCHER', '1'); time.sleep(12)
-        return True
+        st = adb('shell', 'am', 'start', '-W', '-n', f'{PKG}/.MainActivity', timeout=90); time.sleep(12)
+        return (True, {'am_start': st.strip()[-300:], 'pid': adb('shell', 'pidof', PKG).strip(), 'disk': adb('shell', 'df', '-h', '/data').strip()[-160:]})
 
     # reconnect to the new WebView process after the restart
     adb('forward', '--remove-all')
