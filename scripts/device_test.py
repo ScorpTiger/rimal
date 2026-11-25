@@ -128,6 +128,8 @@ def connect(port):
         print(f'   app process {"alive" if alive else "DIED"} — logcat saved to crash-{n}.txt, relaunching', flush=True)
         try: diag = {'df': adb('shell', 'df', '-h', '/data', timeout=30)[-200:], 'mem': adb('shell', 'cat', '/proc/meminfo', timeout=30)[:200], 'am': adb('shell', 'am', 'start', '-W', '-n', f'{PKG}/.MainActivity', timeout=90)[-400:]}
         except Exception as e: diag = {'error': str(e)}
+        try: diag['host'] = subprocess.run('df -h / | tail -1; free -m | head -2; pgrep -fa qemu | head -c 200', shell=True, capture_output=True, text=True, timeout=20).stdout
+        except Exception as e: diag['host'] = str(e)
         print('   diagnostics:', json.dumps(diag)[:1200], flush=True)
         open(f'{OUT}/crash-{n}.txt', 'a').write('\n\nDIAG ' + json.dumps(diag, indent=1))
         if n < 3:
@@ -239,6 +241,25 @@ if True:
         time.sleep(10); shot('hybrid-riyadh')
         n = ev("({roads: __rimal.map.querySourceFeatures('protomaps',{sourceLayer:'roads'}).length, places: __rimal.map.querySourceFeatures('protomaps',{sourceLayer:'places'}).length})")
         return (n['roads'] > 50, n)
+
+    @step('v4: snap to roads + learned GPS correction on the real street map (Riyadh)')
+    def _():
+        ev("__rimal.state.follow=false; __rimal.setS('mapMode','hybrid',true); __rimal.map.jumpTo({center:[46.6753,24.7136], zoom:15})")
+        time.sleep(10)
+        r = ev("""(()=>{ const R = window.__rimal; R.matcher.reset();
+          const roads = R.map.querySourceFeatures('protomaps',{sourceLayer:'roads'}).filter(f => ['major_road','minor_road','highway'].includes(f.properties.kind) && f.geometry.type==='LineString' && f.geometry.coordinates.length>=2);
+          if (!roads.length) return {roads:0};
+          const M=111320*Math.cos(24.71*Math.PI/180); let tot=0, before=0, n=0, snapped=0;
+          for (const rd of roads.slice(0,40)) { const c=rd.geometry.coordinates; for (let i=1;i<c.length;i++){ const a=c[i-1], b=c[i];
+            const dx=(b[0]-a[0])*M, dy=(b[1]-a[1])*110540, len=Math.hypot(dx,dy); if (len<30) continue;
+            const hdg=(Math.atan2(dx,dy)*180/Math.PI+360)%360; const steps=Math.floor(len/15);
+            for (let k=1;k<steps;k++){ const t=k/steps; const lon=a[0]+(b[0]-a[0])*t, lat=a[1]+(b[1]-a[1])*t;
+              const g={lon: lon+22/M, lat: lat-12/110540, acc:25, speed:10, heading:hdg, t:Date.now()};
+              const out=R.correctFix(g); if(out.snapped) snapped++;
+              tot+=Math.hypot((out.lon-lon)*M,(out.lat-lat)*110540); before+=Math.hypot(22,12); n++; } } }
+          return {roads: roads.length, samples:n, snappedPct: Math.round(snapped/n*100), errBefore: Math.round(before/n), errAfter: Math.round(tot/n*10)/10, bias: R.getBias()?.current()?.map(v=>Math.round(v))};
+        })()""")
+        return (r and r.get('roads', 0) > 0 and r['errAfter'] < r['errBefore'] / 2, r)
 
     @step('Topo + hillshade + contours + 3D terrain render')
     def _():

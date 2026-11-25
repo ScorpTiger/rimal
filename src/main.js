@@ -14,6 +14,7 @@ import { native } from './native.js';
 import { Attitude, gaugeSVG } from './sensors.js';
 import { CRUISER_SVG, ARROW_SVG } from './vehicle.js';
 import * as act from './activity.js';
+import { RoadMatcher, BiasLearner } from './matcher.js';
 import { planNight, nextNights } from './stars.js';
 import { fuelStats, rangeFrom, defaultChecklist, filesFromZip } from './triptools.js';
 import { sunTimes, hhmm, weather, WX, POI_CATS, setPOIs, poiCount, nearest, search as poiSearch, poiGeoJSON, profileSVG } from './extras.js';
@@ -328,10 +329,50 @@ let staleTimer, lastGroundAt = 0, lastOdo = null;
 
 function setGpsPill(text, cls) { const p = $('gpsState'); if (p.textContent !== text) act.log('gps', `status ${p.textContent || '—'} → ${text}`); p.textContent = text; p.className = 'pill ' + cls; }
 
+/* ---------- GPS correction: snap to roads + self-learned bias ---------- */
+const ROAD_KINDS = new Set(['highway', 'major_road', 'minor_road']);
+const matcher = new RoadMatcher((lon, lat) => {
+  const out = [];
+  try {
+    for (const f of map.querySourceFeatures('protomaps', { sourceLayer: 'roads' })) {
+      const k = f.properties?.kind; if (!ROAD_KINDS.has(k) && !(S.snapTracks && (k === 'path' || k === 'other'))) continue;
+      const g = f.geometry; const id = f.id ?? f.properties?.name ?? null;
+      if (g.type === 'LineString') out.push({ coords: g.coordinates, id });
+      else if (g.type === 'MultiLineString') for (const c of g.coordinates) out.push({ coords: c, id });
+    }
+  } catch { /* style reloading */ }
+  return out;
+});
+let bias = null, biasSavedAt = 0;
+function correctFix(f) {
+  if (S.demoGps || !map) return f;
+  bias ||= new BiasLearner(S.gpsBias);
+  const raw = { lon: f.lon, lat: f.lat };
+  let [lon, lat] = S.gpsLearn !== false ? bias.apply(f.lon, f.lat) : [f.lon, f.lat];
+  let snapped = null;
+  if (S.roadSnap !== false && map.getSource('protomaps') && map.getZoom() >= 12) {
+    snapped = matcher.match(lon, lat, f.heading, f.speed, f.acc);
+    if (snapped) {
+      const b = bias.current();
+      if (snapped.straight && f.speed > 3 && f.acc <= 50) bias.add(snapped.normal, snapped.offset + (b ? snapped.normal[0] * b[0] + snapped.normal[1] * b[1] : 0));
+      lon = snapped.lon; lat = snapped.lat;
+    }
+  }
+  if (Date.now() - biasSavedAt > 60000) { biasSavedAt = Date.now(); S.gpsBias = bias.toJSON(); store.saveSetting('gpsBias', S.gpsBias); }
+  return { ...f, lon, lat, raw, snapped: !!snapped };
+}
+function gpsCorrectionText() {
+  const b = bias?.current();
+  if (!b) return 'Not learned yet — drive a few minutes on streets with turns.';
+  const m = Math.hypot(b[0], b[1]); const dir = cardinal((Math.atan2(b[0], b[1]) * 180 / Math.PI + 360) % 360);
+  return `This GPS is reading about <b>${Math.round(m)} m</b> off; Rimal moves fixes ${Math.round(m)} m ${dir} to correct it (learned ${Math.round((Date.now() - bias.at) / 60000)} min ago).`;
+}
+
 let lastGpsLog = 0;
 function onFix(f) {
   noteFix(f);
-  if (!state.fix || Date.now() - lastGpsLog > 15000) { lastGpsLog = Date.now(); act.log('gps', state.fix ? 'fix' : 'first fix', { lon: f.lon, lat: f.lat, acc: Math.round(f.acc), kmh: f.speed != null ? Math.round(f.speed * 3.6) : null, hdg: f.heading != null ? Math.round(f.heading) : null, alt: f.alt != null ? Math.round(f.alt) : null }); }
+  f = correctFix(f);
+  if (!state.fix || Date.now() - lastGpsLog > 15000) { lastGpsLog = Date.now(); act.log('gps', state.fix ? 'fix' : 'first fix', { lon: f.lon, lat: f.lat, rawLon: f.raw?.lon, rawLat: f.raw?.lat, snapped: f.snapped, bias: bias?.current()?.map(Math.round), acc: Math.round(f.acc), kmh: f.speed != null ? Math.round(f.speed * 3.6) : null, hdg: f.heading != null ? Math.round(f.heading) : null, alt: f.alt != null ? Math.round(f.alt) : null }); }
   else if (state.fix && f.t - state.fix.t > 10000) act.log('gps', `gap of ${Math.round((f.t - state.fix.t) / 1000)} s between fixes`, { acc: Math.round(f.acc) });
   if (!marks.firstFix) marks.firstFix = Math.round(performance.now());
   const wasFirst = !state.fix;
@@ -1729,6 +1770,11 @@ function settingsSheet() {
     <label class="toggle"><span><b>Lite mode</b> — faster on car screens (fewer labels, no contours or 3D, lower drawing resolution)</span><input type="checkbox" id="sLite" ${S.lite ? 'checked' : ''}></label>
     <label class="toggle"><span><b>Voice guidance</b> — distances, arrival and warnings spoken aloud</span><input type="checkbox" id="sVoice" ${S.voice ? 'checked' : ''}></label>
     <div class="btns" style="margin:4px 0 10px"><button class="btn sm" data-a="vtest">🔊 Test voice</button></div>
+    <h3>GPS accuracy</h3>
+    <label class="toggle"><span><b>Snap to roads</b> — on streets, keep your position and track on the road</span><input type="checkbox" id="sSnap" ${S.roadSnap !== false ? 'checked' : ''}></label>
+    <label class="toggle"><span><b>Learn and correct GPS error</b> — measured on roads, also used off-road</span><input type="checkbox" id="sLearn" ${S.gpsLearn !== false ? 'checked' : ''}></label>
+    <label class="toggle"><span>Also snap to desert tracks and paths</span><input type="checkbox" id="sSnapT" ${S.snapTracks ? 'checked' : ''}></label>
+    <p class="note">${gpsCorrectionText()}</p>
     <label class="toggle"><span>Highlight desert tracks from the map (orange dashes)</span><input type="checkbox" id="sTracks" ${S.highlightTracks ? 'checked' : ''}></label>
     <label class="toggle"><span>Heat warning (45 °C and above, from the saved forecast)</span><input type="checkbox" id="sHeat" ${S.heatWarn ? 'checked' : ''}></label>
     <label class="toggle"><span>Activity recorder (for finding bugs — stays on this unit)</span><input type="checkbox" id="sAct" ${S.activityLog !== false ? 'checked' : ''}></label>
@@ -1746,6 +1792,9 @@ function settingsSheet() {
   $('sAuto').onchange = (e) => setS('autoRecord', e.target.checked);
   $('sTintOn').onchange = (e) => setRedMode(e.target.checked);
   $('sVoice').onchange = (e) => { setS('voice', e.target.checked); if (e.target.checked) say('Voice guidance on', true); };
+  $('sSnap').onchange = (e) => setS('roadSnap', e.target.checked);
+  $('sLearn').onchange = (e) => setS('gpsLearn', e.target.checked);
+  $('sSnapT').onchange = (e) => { setS('snapTracks', e.target.checked); matcher.reset(); };
   $('sTracks').onchange = (e) => setS('highlightTracks', e.target.checked, true);
   $('sHeat').onchange = (e) => setS('heatWarn', e.target.checked);
   $('sAct').onchange = (e) => { setS('activityLog', e.target.checked); act.setEnabled(e.target.checked); };
@@ -1828,7 +1877,7 @@ async function boot() {
   // Keep the map credits folded into the (i) button so they don't cover the map on phones.
   map.once('load', () => document.querySelectorAll('.maplibregl-compact-show').forEach((el) => el.classList.remove('maplibregl-compact-show')));
   updateNoMapHint();
-  window.__rimal = { act, planNight, updateNoMapHint, checkAppUpdate, say, map, state, S, gps, tiles, packs, store, native, checkUpdates, setS, applyStyle, stopRecording, startRoute, startGoto, refreshWeather, attitude, buildReport: (note) => buildReport({ state, S, map, tiles, attitude, native }, note), marks };
+  window.__rimal = { matcher, getBias: () => bias, correctFix, act, planNight, updateNoMapHint, checkAppUpdate, say, map, state, S, gps, tiles, packs, store, native, checkUpdates, setS, applyStyle, stopRecording, startRoute, startGoto, refreshWeather, attitude, buildReport: (note) => buildReport({ state, S, map, tiles, attitude, native }, note), marks };
 
   // Log map errors as readable text (default handler prints "[object Object]" in Android logs).
   let mapErrs = 0;
@@ -1906,7 +1955,7 @@ async function boot() {
   if (unfinished.length) setTimeout(() => toast(`“${unfinished[0].name}” didn’t finish downloading — Maps → Satellite & areas → Continue`, 7000), 4000);
   setTimeout(() => { if (navigator.onLine !== false) checkAppUpdate(false).catch(() => {}); }, 20000);
   gps.start(S.demoGps);
-  act.startHeartbeat(() => ({ zoom: +map.getZoom().toFixed(1), follow: state.follow, rec: state.rec.active ? state.rec.points.length : 0, nav: !!state.nav, online: tiles.isOnline(), gps: $('gpsState').textContent, acc: state.fix ? Math.round(state.fix.acc) : null, fixAgeS: state.fix ? Math.round((Date.now() - state.fix.t) / 1000) : null }));
+  act.startHeartbeat(() => ({ snap: matcher.stats.fixes ? Math.round(matcher.stats.snapped / matcher.stats.fixes * 100) + '%' : null, bias: bias?.current()?.map(Math.round) || null, zoom: +map.getZoom().toFixed(1), follow: state.follow, rec: state.rec.active ? state.rec.points.length : 0, nav: !!state.nav, online: tiles.isOnline(), gps: $('gpsState').textContent, acc: state.fix ? Math.round(state.fix.acc) : null, fixAgeS: state.fix ? Math.round((Date.now() - state.fix.t) / 1000) : null }));
 
   // Status line for automated device tests (Android logcat / iOS console).
   const status = () => console.log('RIMAL_STATUS ' + JSON.stringify({ platform: native.platform, engine: state.engineOk, webgl2: !!document.createElement('canvas').getContext('webgl2'), opfs: !!navigator.storage?.getDirectory, fix: state.fix && [+state.fix.lon.toFixed(4), +state.fix.lat.toFixed(4), state.fix.acc], maps: Object.keys(state.maps).length, styleLoaded: map.isStyleLoaded(), zoom: +map.getZoom().toFixed(1), sensor: attitude.available }));

@@ -42,7 +42,7 @@ jobs:
           sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
 
       - name: Free disk space for the emulator
-        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /opt/hostedtoolcache/CodeQL /usr/local/.ghcup /usr/share/swift || true; df -h /; free -m
 
       - name: Run on emulator
         uses: reactivecircus/android-emulator-runner@v2
