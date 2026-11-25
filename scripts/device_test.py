@@ -122,7 +122,8 @@ def connect(port):
         # The app process is gone: keep the evidence, then relaunch it once so the remaining steps can run.
         alive = adb('shell', 'pidof', PKG).strip()
         n = len([f for f in os.listdir(OUT) if f.startswith('crash-')])
-        lc = adb('logcat', '-d', '-t', '3000', timeout=120)
+        try: lc = adb('logcat', '-d', '-t', '3000', timeout=120)
+        except Exception as e: lc = f'logcat unavailable: {e}'
         open(f'{OUT}/crash-{n}.txt', 'w').write(f'pid: {alive or "NOT RUNNING"}\n' + '\n'.join(l for l in lc.splitlines() if re.search(r'rimal|chromium|AndroidRuntime|FATAL|lowmemorykiller|ActivityManager|libc|DEBUG|WebView|Capacitor', l)))
         print(f'   app process {"alive" if alive else "DIED"} — logcat saved to crash-{n}.txt, relaunching', flush=True)
         if n < 3:
