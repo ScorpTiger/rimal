@@ -53,7 +53,6 @@ export const DEFAULTS = {
   night: false,
   headingUp: false,
   lang: 'en',
-  autoRecord: true,
   minPointDist: 8,
   offRouteAlert: 100,
   arrivalRadius: 50,
@@ -92,6 +91,10 @@ export const DEFAULTS = {
   lastView: { center: [45.0, 23.8], zoom: 5 },
   baseMap: null,
   satMap: null,
+  voice: false,             // spoken navigation and warnings
+  voiceRate: 1,
+  appUpdateDismissed: 0,
+  autoRecord: false,        // recording starts only when you tap Record
   activityLog: true,        // on-device activity recorder for finding bugs
   tankL: 0,                 // fuel tank size in litres (fuel log range estimate)
   highlightTracks: true,    // draw desert tracks from the map in bright orange

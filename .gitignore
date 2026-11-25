@@ -9,3 +9,4 @@ android/local.properties
 .DS_Store
 public/maplibre-gl-worker.js
 android/app/rimal.keystore
+docs/manual/Rimal-User-Manual.pdf

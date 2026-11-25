@@ -55,11 +55,25 @@ jobs:
           name: Rimal-OffRoad-APK
           path: Rimal-OffRoad.apk
 
-      - name: Publish APK as a public download (Releases → "Rimal app")
+      - name: Build the user manual (PDF)
+        run: |
+          pip install --quiet reportlab pillow
+          ls /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf || (sudo apt-get update -qq && sudo apt-get install -y -qq fonts-dejavu-core)
+          python3 docs/manual/build_manual.py "4.0.${{ github.run_number }}" Rimal-User-Manual.pdf
+
+      - name: Publish APK + manual (Releases → "Rimal app"; the app updates itself from here)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          ver="2.0.${{ github.run_number }}"
+          ver="4.0.${{ github.run_number }}"
+          code=$((100 + ${{ github.run_number }}))
+          signer=$(ls -d $ANDROID_HOME/build-tools/*/ | sort -V | tail -1)apksigner
+          cert=$($signer verify --print-certs Rimal-OffRoad.apk | grep -m1 'SHA-256 digest' | awk '{print $NF}')
+          echo "version $ver code $code cert $cert"
           gh release delete app-latest --yes --cleanup-tag 2>/dev/null || true
-          gh release create app-latest Rimal-OffRoad.apk --title "Rimal app $ver" --latest \
-            --notes "Install on the head unit: download Rimal-OffRoad.apk, open it, allow 'Install unknown apps'. Built from commit ${{ github.sha }}."
+          gh release create app-latest Rimal-OffRoad.apk Rimal-User-Manual.pdf --title "Rimal app $ver" --latest \
+            --notes "Install: download Rimal-OffRoad.apk and open it (allow 'Install unknown apps'), or in the app: Settings & tools → App update. The user manual is Rimal-User-Manual.pdf.
+
+          versionCode: $code
+          cert: $cert
+          commit: ${{ github.sha }}"

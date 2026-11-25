@@ -3,6 +3,11 @@ import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { KeepAwake } from '@capacitor-community/keep-awake';
+import { FileTransfer } from '@capacitor/file-transfer';
+import { registerPlugin } from '@capacitor/core';
+
+// Rimal's own native helpers (android/app/src/main/java/com/rimal/offroad/RimalNativePlugin.java).
+const RimalNative = registerPlugin('RimalNative');
 
 const isNative = Capacitor.isNativePlatform();
 let wakeLock;
@@ -41,5 +46,41 @@ export const native = {
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     return null;
+  },
+
+  /** Installed app version and signing certificate (Android). */
+  async appInfo() {
+    if (!isNative || Capacitor.getPlatform() !== 'android') return null;
+    try { return await RimalNative.appInfo(); } catch { return null; }
+  },
+
+  /** Download a file into app cache with progress; returns the native file path. */
+  async download(url, name, onProgress) {
+    const { uri } = await Filesystem.getUri({ path: name, directory: Directory.Cache });
+    try { await Filesystem.deleteFile({ path: name, directory: Directory.Cache }); } catch { /* none */ }
+    const h = await FileTransfer.addListener('progress', (p) => onProgress?.(p.bytes / (p.contentLength || 1), p.bytes));
+    try { await FileTransfer.downloadFile({ url, path: uri, progress: true, connectTimeout: 30000, readTimeout: 120000 }); }
+    finally { await h.remove(); }
+    return uri;
+  },
+
+  /** Hand a downloaded APK to Android's installer. Returns {needsPermission} when the user must allow it first. */
+  installApk(path) { return RimalNative.installApk({ path }); },
+  /** Open a file (e.g. the PDF manual) in the device's viewer. */
+  openFile(path, mime = 'application/pdf') { return RimalNative.openFile({ path, mime }); },
+
+  /** Voice guidance through the device's own text-to-speech engine (no download needed). */
+  async speak(text, lang = 'en', rate = 1) {
+    if (isNative && Capacitor.getPlatform() === 'android') { try { return await RimalNative.speak({ text, lang, rate }); } catch { return null; } }
+    try { const u = new SpeechSynthesisUtterance(text); u.lang = lang.startsWith('ar') ? 'ar-SA' : 'en-GB'; u.rate = rate; speechSynthesis.speak(u); return { languageOk: true }; } catch { return null; }
+  },
+  stopSpeaking() { if (isNative && Capacitor.getPlatform() === 'android') return RimalNative.stopSpeaking().catch(() => {}); try { speechSynthesis.cancel(); } catch { /* none */ } },
+
+  /** Send a text file through the share menu (Bluetooth, WhatsApp, email, Drive…). */
+  async shareText(filename, text) {
+    if (!isNative) return this.saveText(filename, text);
+    const r = await Filesystem.writeFile({ path: filename, data: text, directory: Directory.Cache, encoding: Encoding.UTF8 });
+    await Share.share({ title: filename, files: [r.uri], dialogTitle: 'Send ' + filename });
+    return 'shared';
   },
 };

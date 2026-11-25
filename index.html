@@ -53,9 +53,10 @@
       <button id="bGoto" class="tool" title="Go to"><i>➤</i><span>Go To</span></button>
       <button id="bBack" class="tool" title="TrackBack"><i>↶</i><span>TrackBack</span></button>
       <button id="bSearch" class="tool" title="Search &amp; POIs"><i>⌕</i><span>Search</span></button>
-      <button id="bLib" class="tool" title="Trips, routes &amp; waypoints"><i>☰</i><span>Trips</span></button>
+      <button id="bLib" class="tool" title="Trips, routes &amp; waypoints"><i>▤</i><span>Trips</span></button>
       <button id="bMaps" class="tool" title="Maps &amp; layers"><i>🛰</i><span>Maps</span></button>
       <button id="bTools" class="tool" title="Settings &amp; tools"><i>⚙</i><span>Settings</span></button>
+      <button id="bMore" class="tool" title="More"><i>☰</i><span>More</span></button>
     </nav>
 
     <div id="mapBtns">
@@ -71,12 +72,13 @@
     <div id="noMap" hidden>
       <h2>Maps not downloaded yet</h2>
       <p id="noMapText"></p>
-      <div class="btns"><button id="noMapDl" class="primary">⬇ Download maps now</button><button id="noMapBtn" class="btn">Import from USB / more</button></div>
+      <div class="btns"><button id="noMapDl" class="primary">⬇ Download maps now</button><button id="noMapBtn" class="btn">Import from USB / more</button><button id="noMapLater" class="btn">Later</button></div>
       <p id="noMapProg" class="note"></p>
     </div>
 
     <div id="sheet" hidden><div class="sheetBox"><header><h2 id="sheetTitle"></h2><button id="sheetClose">✕</button></header><div id="sheetBody"></div></div></div>
     <div id="toast" hidden></div>
+    <div id="appUpd" hidden><span id="appUpdTxt"></span><button id="appUpdGo" class="primary sm">Update</button><button id="appUpdX" class="btn sm">✕</button></div>
     <input type="file" id="fileInput" hidden />
   </div>
   <!-- Startup check (plain ES5 so it runs on any web engine): if the app fails to start,

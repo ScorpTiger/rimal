@@ -323,6 +323,15 @@ if True:
         ev("document.body.classList.add('redmode')"); time.sleep(1); shot('v3-redmode'); ev("document.body.classList.remove('redmode')")
         return (n and float(n['dark']) > 8, n)
 
+    @step('v4: native helpers — app version/signing, voice engine, app-update check, phone layout')
+    def _():
+        info = ev("window.__rimal.native.appInfo()")
+        voice = ev("window.__rimal.native.speak('Rimal voice test', 'en', 1)")
+        upd = ev("window.__rimal.checkAppUpdate(true).then(r => r && {name: r.name, code: r.code, newer: r.newer, sameKey: r.sameKey})")
+        rec = ev("window.__rimal.state.rec.active")
+        ok = bool(info and info.get('versionCode') and info.get('certSha256')) and upd is not None
+        return (ok, {'appInfo': info, 'voice': voice, 'update': upd, 'recordingOnStart': rec})
+
     @step('Performance: memory and frame timing on the emulator')
     def _():
         ev("__rimal.map.jumpTo({center:[46.6753,24.7136], zoom:13})")

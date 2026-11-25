@@ -238,3 +238,61 @@ body.redmode::before { content: ''; position: fixed; inset: 0; background: rgba(
 /* WebKit (iPad) composites the WebGL map above later siblings that have no z-index — keep panels on top explicitly. */
 #map { z-index: 0; }
 #dash, #tools { z-index: 2; }
+
+/* ================= v4: safe areas, phone layout, hide-on-tap ================= */
+:root {
+  --sat: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --sab: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --sal: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+  --sar: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+}
+/* Keep everything between Android's status bar and navigation bar (edge-to-edge on Android 15+). */
+#app { inset: var(--sat) var(--sar) var(--sab) var(--sal); }
+#bMore { display: none; }
+#appUpd { position: absolute; left: 50%; transform: translateX(-50%); top: 10px; z-index: 30; background: var(--panel); border: 1px solid var(--accent); border-radius: 14px; padding: 8px 10px 8px 14px; display: flex; gap: 10px; align-items: center; box-shadow: 0 6px 24px rgba(0,0,0,.4); max-width: calc(100% - 20px); }
+#appUpd span { font-size: 14px; }
+#noMap.compact p, #noMap.compact #noMapProg { display: none; }
+
+/* Tap the map to hide the buttons (and tap again to bring them back). */
+body.hidechrome #tools, body.hidechrome #mapBtns, body.hidechrome #tilt { display: none !important; }
+body.hidechrome { --tool-w: 0px; }
+#chromeHint { position: absolute; right: 10px; bottom: 10px; z-index: 5; background: var(--panel); border: 1px solid var(--line); color: var(--muted); border-radius: 99px; padding: 6px 12px; font-size: 12px; pointer-events: none; }
+
+/* ---------- phones (portrait, narrow) ---------- */
+@media (max-width: 700px), (orientation: portrait) and (max-width: 900px) {
+  #dash { height: 66px; padding: 6px 8px; flex-wrap: nowrap; align-items: center; gap: 8px; overflow: hidden; }
+  .brand { width: auto; height: auto; order: 3; flex: none; }
+  .brand { font-size: 0; letter-spacing: 0; } .brand .pill { font-size: 10px; }
+  .big { font-size: 34px; flex: none; } .big small { font-size: 11px; margin-left: 2px; }
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .grid .cell:nth-child(n+3) { display: none; }
+  .cell { padding: 3px 7px; } .cell label { font-size: 9px; } .cell b { font-size: 15px; }
+  #map { inset: 66px 0 64px 0; }
+  #tools { height: 64px; justify-content: space-around; padding: 0 2px; }
+  #tools .tool { flex: 1; min-width: 0; padding: 4px 0; border-radius: 10px; }
+  #tools .tool i { font-size: 20px; } #tools .tool span { font-size: 10.5px; white-space: nowrap; }
+  #bBack, #bSearch, #bMaps, #bTools { display: none !important; }
+  #bMore { display: flex; }
+  #mapBtns { right: 8px; bottom: 76px; gap: 8px; }
+  .round { width: 46px; height: 46px; font-size: 22px; }
+  #bZoomIn, #bZoomOut, #b3d { display: none; }
+  #navBar { top: 74px; left: 6px; right: 6px; padding: 8px 10px; }
+  #navBar .navArrow { width: 54px; height: 54px; }
+  #navBar .navNums b { font-size: 20px; }
+  #alertBar { top: 150px; left: 6px; right: 6px; }
+  #tilt { left: 6px; bottom: 74px; } #tilt > div { width: 56px; }
+  #noMap { left: 8px; right: 62px; bottom: 74px; padding: 10px 12px; }
+  #noMap h2 { font-size: 15px; } #noMap p { font-size: 13px; }
+  #noMap .btns button { padding: 8px 10px; font-size: 13px; }
+  .sheetBox { width: 100% !important; max-width: 100% !important; max-height: calc(100% - 8px) !important; border-radius: 16px 16px 0 0 !important; }
+  #sheet { place-items: end center !important; }
+  .toolgrid button { min-height: 78px; }
+  .toolgrid i { font-size: 24px; }
+  body.hidechrome #map { bottom: 0; }
+}
+@media (max-width: 700px), (orientation: portrait) and (max-width: 900px) {
+  #toast { bottom: 76px !important; max-width: calc(100% - 24px); }
+  .maplibregl-ctrl-attrib.maplibregl-compact { max-width: calc(100% - 70px); }
+  .maplibregl-ctrl-bottom-right { right: 56px; }
+  #chromeHint { bottom: 40px; right: 50%; transform: translateX(50%); }
+}

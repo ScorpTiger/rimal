@@ -167,6 +167,8 @@ function buildStyle() {
 function applyStyle() {
   map.setStyle(buildStyle(), { diff: false });
   map.once('style.load', () => { applyTerrain(); refreshOverlays(); });
+  // Keep the map credits folded into the (i) button so they don't cover the map on phones.
+  map.once('load', () => document.querySelectorAll('.maplibregl-compact-show').forEach((el) => el.classList.remove('maplibregl-compact-show')));
   updateNoMapHint();
 }
 function applyTerrain() {
@@ -178,8 +180,14 @@ function applyTerrain() {
 function updateNoMapHint() {
   if (!state.engineOk) return;
   const hasStreetMap = Object.values(state.maps).some((m) => m.kind === 'vector');
-  $('noMap').hidden = hasStreetMap;
-  if (hasStreetMap) return;
+  $('noMap').hidden = hasStreetMap || state.noMapDismissed;
+  if (hasStreetMap || state.noMapDismissed) return;
+  if (outsideKSA()) {
+    $('noMap').querySelector('h2').textContent = 'You are outside Saudi Arabia';
+    $('noMapText').innerHTML = 'Rimal’s ready-made offline packs cover Saudi Arabia only. Here, the satellite map loads online; to keep it for offline use, move the map to where you will drive and use <b>Maps → Satellite &amp; areas → Download this area</b>.';
+    $('noMapDl').hidden = true; $('noMapProg').textContent = ''; return;
+  }
+  $('noMapDl').hidden = false; $('noMap').querySelector('h2').textContent = 'Maps not downloaded yet';
   const online = navigator.onLine !== false;
   $('noMapText').innerHTML = state.update.busy
     ? 'Downloading the offline maps of Saudi Arabia (about 1.3 GB). Keep Rimal open — you can drive meanwhile.'
@@ -257,6 +265,8 @@ async function checkUpdates(manual = false) {
   if (state.update.busy) return manual && toast('Already updating…');
   if (!S.updateRepo) { if (manual) toast('Set the map update source first (Maps → Updates)'); return; }
   if (!manual && !packs.connectionOk(S.autoUpdate)) return;
+  // Packs are Saudi-only: never download them automatically for someone driving elsewhere.
+  if (!manual && outsideKSA() && !Object.values(state.maps).length) { act.log('update', 'outside Saudi Arabia — automatic map download skipped'); return; }
   tiles.resetOnline(); // a slow satellite tile shouldn't block the update check
   if (!tiles.isOnline()) { if (manual) toast('No internet — keeping your current offline maps'); return; }
   state.update.busy = true; setUpdateMsg('Checking for map updates…');
@@ -633,7 +643,7 @@ function startGoto(target, name) {
   act.log('nav', `go to “${name}”`, { target });
   $('navBar').hidden = false; $('navOffWrap').hidden = true;
   refreshOverlays();
-  if (state.fix) navigate(state.fix); else toast('Navigation set — waiting for GPS');
+  if (state.fix) { navigate(state.fix); say(`Going to ${name}. ${spokenDist(distance([state.fix.lon, state.fix.lat], target))}, ${CARD_WORDS[cardinal(bearing([state.fix.lon, state.fix.lat], target))] || ''}. Straight line, not along roads.`); } else toast('Navigation set — waiting for GPS');
   state.follow = true; $('bFollow').classList.add('on');
 }
 function startRoute(coords, name, reverse, label) {
@@ -648,6 +658,7 @@ function startRoute(coords, name, reverse, label) {
   refreshOverlays();
   navZoom();
   if (state.fix) navigate(state.fix); else map.fitBounds(bbox(thin), { padding: 60, duration: 600 });
+  say(`${state.nav.name.replace(':', '.')}. ${spokenDist(state.nav.cum.at(-1))}.`);
   state.follow = true; $('bFollow').classList.add('on');
 }
 function stopNav() { if (state.nav) act.log('nav', 'navigation stopped'); state.nav = null; $('navBar').hidden = true; hideAlert(); refreshOverlays(); }
@@ -681,13 +692,14 @@ function navigate(f) {
   if (!n.arrived && distance(me, n.target) < S.arrivalRadius && (n.kind === 'goto' || n.cum.at(-1) - (n.cum[n.hint] || 0) < S.arrivalRadius * 3)) {
     n.arrived = true; alertBar(`ARRIVED · ${n.name}`, true); beep(3); setTimeout(hideAlert, 8000);
   }
+  voiceNav(n, dist, brg);
   updateNavLine();
 }
 
-function alertBar(text, ok = false) { act.log('nav', `alert: ${text}`); const a = $('alertBar'); a.textContent = text; a.className = ok ? 'ok' : ''; a.hidden = false; }
+function alertBar(text, ok = false) { act.log('nav', `alert: ${text}`); say(text.replace(/^[^A-Za-z]+/, '')); const a = $('alertBar'); a.textContent = text; a.className = ok ? 'ok' : ''; a.hidden = false; }
 function hideAlert() { $('alertBar').hidden = true; }
 
-let audioCtx;
+let audioCtx, chromeT;
 function beep(n = 1, freq = 880) {
   try {
     audioCtx ||= new (window.AudioContext || window.webkitAudioContext)();
@@ -1094,7 +1106,7 @@ async function mapsSheet() {
       <div class="btns" style="margin:14px 0"><button class="primary" data-a="area">⬇ Download this area for offline</button></div>
       <p class="note" id="cacheCount">Counting stored tiles…</p>
       <h3>Downloaded areas</h3>
-      ${state.areas.length ? state.areas.map((a) => `<div class="row"><div class="grow"><div class="title">${esc(a.name)}</div><div class="sub">${a.layers.map((l) => (l === 'sat' ? 'imagery z' + a.maxZoom : 'terrain')).join(' + ')} · ${a.tiles.toLocaleString()} tiles · ${gb(a.bytes)} · ${new Date(a.updated || a.created).toLocaleDateString()}${a.failed ? ` · ${a.failed} missing` : ''}</div></div><button class="btn sm" data-a="aview" data-id="${a.id}">View</button><button class="btn sm" data-a="arefresh" data-id="${a.id}">Update</button><button class="btn sm danger" data-a="adel" data-id="${a.id}">✕</button></div>`).join('') : '<div class="empty">No areas downloaded yet. Pan to where you will drive, then tap Download.</div>'}`,
+      ${state.areas.length ? state.areas.map((a) => `<div class="row"><div class="grow"><div class="title">${esc(a.name)}</div><div class="sub">${a.layers.map((l) => (l === 'sat' ? 'imagery z' + a.maxZoom : 'terrain')).join(' + ')} · ${a.tiles.toLocaleString()} tiles · ${gb(a.bytes)} · ${new Date(a.updated || a.created).toLocaleDateString()}${a.failed ? ` · ${a.failed} missing` : ''}${a.status && a.status !== 'complete' ? ' · <b style="color:#ffb020">not finished</b>' : ''}</div></div><button class="btn sm" data-a="aview" data-id="${a.id}">View</button>${a.status && a.status !== 'complete' ? `<button class="primary sm" data-a="acont" data-id="${a.id}">▶ Continue</button>` : `<button class="btn sm" data-a="arefresh" data-id="${a.id}">Update</button>`}<button class="btn sm danger" data-a="adel" data-id="${a.id}">✕</button></div>`).join('') : '<div class="empty">No areas downloaded yet. Pan to where you will drive, then tap Download.</div>'}`,
     updates: `
       <p class="note">New map versions are built every month in the cloud. When this unit is online, Rimal checks for them and installs them in the background. <b>The previous version is always kept</b>, so you still have full detail offline if a download fails or is incomplete.</p>
       <div class="field"><label>Update source (GitHub repository “owner/name”)</label><input type="text" id="uRepo" value="${esc(S.updateRepo)}" placeholder="yourname/rimal"></div>
@@ -1119,6 +1131,7 @@ async function mapsSheet() {
     area: () => areaSheet(),
     aview: (id) => { const a = state.areas.find((x) => x.id === id); closeSheet(); unfollow(); map.fitBounds([[a.bbox[0], a.bbox[1]], [a.bbox[2], a.bbox[3]]]); },
     arefresh: (id) => runAreaDownload(state.areas.find((x) => x.id === id), true),
+    acont: (id) => runAreaDownload(state.areas.find((x) => x.id === id), false),
     adel: async (id) => {
       const a = state.areas.find((x) => x.id === id);
       if (!(await confirmBox(`Delete the offline area “${esc(a.name)}”?`))) return;
@@ -1177,7 +1190,7 @@ function areaSheet() {
     start: () => {
       const layers = [...($('aSat').checked ? ['sat'] : []), ...($('aDem').checked ? ['dem'] : [])];
       if (!layers.length) return;
-      const area = { id: store.uid(), name: $('aName').value || 'Area', bbox: bboxV, maxZoom: z, demMaxZoom: 12, layers, source: S.satSource, tiles: 0, bytes: 0, created: Date.now() };
+      const area = { id: store.uid(), name: $('aName').value || 'Area', bbox: bboxV, maxZoom: z, demMaxZoom: 12, layers, source: S.satSource, tiles: 0, bytes: 0, created: Date.now(), status: 'downloading' };
       runAreaDownload(area, false);
     },
   });
@@ -1188,6 +1201,10 @@ let areaAbort;
 async function runAreaDownload(area, refresh) {
   if (!tiles.isOnline()) return toast('No internet connection — connect to download. Your existing offline data stays in use.');
   areaAbort = new AbortController();
+  // Save the area before downloading, so it can be continued if the car is switched off half-way.
+  area.status = 'downloading'; await store.put('areas', area);
+  if (!state.areas.some((a) => a.id === area.id)) state.areas.push(area);
+  act.log('data', `area download ${refresh ? 'update' : 'start/continue'}: ${area.name}`, { z: area.maxZoom });
   openSheet(`Downloading “${area.name}”`, `<div class="progress" id="dProg"><div></div></div><p id="dTxt">Starting…</p><p class="note">You can keep driving and using the map. Already-stored tiles are skipped, so an interrupted download resumes where it stopped.${refresh ? ' Updating replaces tiles only when the new copy downloads successfully.' : ''}</p><div class="btns"><button class="btn danger" data-a="cancel">Stop</button></div>`, {
     cancel: () => areaAbort.abort(),
   });
@@ -1195,10 +1212,11 @@ async function runAreaDownload(area, refresh) {
     bbox: area.bbox, layers: area.layers, maxZoom: area.maxZoom, demMaxZoom: area.demMaxZoom, signal: areaAbort.signal, force: refresh,
     onProgress: (p, s) => { const bar = document.querySelector('#dProg > div'); if (bar) bar.style.width = `${p * 100}%`; const t = $('dTxt'); if (t) t.textContent = `${s.done.toLocaleString()} / ${s.total.toLocaleString()} tiles · ${gb(s.bytes)}${s.failed ? ` · ${s.failed} failed` : ''}`; },
   });
-  area.tiles = res.total; area.bytes = refresh ? Math.max(area.bytes, res.bytes) : res.bytes; area.failed = res.failed; area.updated = Date.now();
+  area.tiles = res.total; area.bytes = Math.max(area.bytes || 0, res.bytes); area.failed = res.failed; area.updated = Date.now();
+  area.status = res.cancelled || res.failed ? 'partial' : 'complete'; area.done = res.done;
   await store.put('areas', area);
   if (!state.areas.some((a) => a.id === area.id)) state.areas.push(area);
-  toast(res.cancelled ? `Stopped — ${res.done.toLocaleString()} tiles kept; tap Update to resume` : `“${area.name}” ready offline${res.failed ? ` (${res.failed} tiles could not be fetched)` : ''}`, 6000);
+  toast(res.cancelled ? `Stopped — ${res.done.toLocaleString()} tiles kept; tap Continue to carry on` : `“${area.name}” ready offline${res.failed ? ` (${res.failed} tiles could not be fetched)` : ''}`, 6000);
   mapsTab = 'imagery'; mapsSheet(); updateNoMapHint();
 }
 
@@ -1251,12 +1269,15 @@ function toolsSheet() {
     <button data-a="fuel"><i>⛽</i>Fuel range</button>
     <button data-a="sun"><i>☀</i>Sun &amp; time</button>
     <button data-a="sos" class="sos"><i>SOS</i>Emergency</button>
+    <button data-a="svc"><i>🔧</i>Service checklist</button>
+    <button data-a="manual"><i>📖</i>User manual</button>
+    <button data-a="appupd"><i>⬆</i>App update</button>
     <button data-a="backup"><i>💾</i>Backup</button>
     <button data-a="report"><i>🧪</i>Test report</button>
   </div>`, {
     report: reportSheet, flag: flagIssue, act: () => activitySheet(), check: checklistSheet, stars: starsSheet, flog: fuelLogSheet,
     plan: () => startPlan('route'), measure: () => startPlan('measure'), tilt: tiltSheet, wx: weatherSheet, fuel: fuelSheet, sun: sunSheet,
-    sos: sosSheet, settings: settingsSheet,
+    sos: sosSheet, settings: settingsSheet, svc: serviceSheet, manual: openManual, appupd: appUpdateSheet,
     backup: () => openSheet('Backup & restore', `<p class="note">Saves all trips, routes, waypoints and settings into one file (Documents/Rimal). Restore it on this or another unit via Trips → Import.</p><div class="btns"><button class="primary" data-a="b">💾 Create backup</button><button class="btn" data-a="r">Restore from file</button></div>`, { b: backup, r: () => pickFile('.json,application/json', importFiles, false) }),
   });
 }
@@ -1335,7 +1356,7 @@ async function activitySheet(sel = null) {
   openSheet('Activity log', `
     <p class="note">Rimal records what happens while you drive — taps, screens, GPS quality and dropouts, map and download problems, navigation, recordings, app speed and every error — on this unit only, for 14 days. Nothing is sent anywhere. When something goes wrong tap <b>🐞 Flag issue</b>; later <b>Export</b> and send the file to Claude.</p>
     <label class="toggle"><span>Record activity</span><input type="checkbox" id="aOn" ${S.activityLog !== false ? 'checked' : ''}></label>
-    <div class="btns" style="margin:10px 0"><button class="primary" data-a="flag">🐞 Flag issue now</button><button class="btn" data-a="exp">⤓ Export all</button><button class="btn" data-a="clr">Clear</button></div>
+    <div class="btns" style="margin:10px 0"><button class="primary" data-a="flag">🐞 Flag issue now</button><button class="btn" data-a="exp">⤓ Export all</button><button class="btn" data-a="send">📤 Send…</button><button class="btn" data-a="clr">Clear</button></div>
     <p class="note">This session: ${st.total} events · ${st.error} errors · ${st.warn} warnings · ${st.issue} flagged</p>
     <h3>Sessions</h3>
     ${list.length ? list.slice(0, 30).map((x) => `<div class="row"><div class="grow"><div class="title">${fmtT(x.from)} → ${new Date(x.to).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}${x.id === st.session ? ' · now' : ''}</div><div class="sub">${x.n} events · <span style="color:${x.errors ? 'var(--danger)' : 'inherit'}">${x.errors} errors</span> · ${x.warns} warnings${x.issues ? ` · <b style="color:#ffd60a">${x.issues} flagged</b>` : ''}</div></div><button class="btn" data-a="view" data-id="${x.id}">View</button><button class="btn" data-a="one" data-id="${x.id}">⤓</button></div>`).join('') : '<div class="empty">No activity recorded yet</div>'}
@@ -1343,6 +1364,7 @@ async function activitySheet(sel = null) {
     flag: flagIssue,
     view: (id) => activitySheet(id),
     exp: () => exportActivity(),
+    send: async () => { const evs = await act.all(); try { await native.shareText(`rimal-activity-${dateStamp()}.txt`, act.toText(evs)); } catch (e) { toast(`Could not share: ${e.message}`); } },
     one: (id) => exportActivity(id),
     clr: async () => { if (await confirmBox('Delete the whole activity log?')) { await act.clearAll(); toast('Activity log cleared'); activitySheet(); } },
   });
@@ -1487,6 +1509,190 @@ async function checklistSheet() {
   $('cD').onchange = (e) => { setS('tripDays', Math.max(1, +e.target.value || 1)); checklistSheet(); };
 }
 
+/* ---------- v4: voice guidance ---------- */
+const CARD_WORDS = { N: 'north', NNE: 'north north-east', NE: 'north-east', ENE: 'east north-east', E: 'east', ESE: 'east south-east', SE: 'south-east', SSE: 'south south-east', S: 'south', SSW: 'south south-west', SW: 'south-west', WSW: 'west south-west', W: 'west', WNW: 'west north-west', NW: 'north-west', NNW: 'north north-west' };
+function spokenDist(m) {
+  if (S.units === 'imperial') { const mi = m / 1609.34; return mi >= 1 ? `${mi >= 10 ? Math.round(mi) : mi.toFixed(1)} miles` : `${Math.round(m * 3.28084 / 50) * 50} feet`; }
+  return m >= 1000 ? `${m >= 10000 ? Math.round(m / 1000) : (m / 1000).toFixed(1)} kilometres` : `${Math.max(10, Math.round(m / 10) * 10)} metres`;
+}
+let lastSaid = '', lastSaidAt = 0;
+function say(text, force = false) {
+  if (!S.voice && !force) return;
+  const t = String(text).replace(/[·•]/g, ',').replace(/[^\p{L}\p{N}\s,.'°%:-]/gu, ' ').replace(/\s+/g, ' ').trim();
+  if (!t || (t === lastSaid && Date.now() - lastSaidAt < 20000)) return;
+  lastSaid = t; lastSaidAt = Date.now();
+  act.log('nav', `voice: ${t}`);
+  native.speak(t, 'en', S.voiceRate || 1);
+}
+const CALLOUTS = [20000, 10000, 5000, 2000, 1000, 500, 200, 100];
+function voiceNav(n, dist, brg) {
+  if (!S.voice || n.arrived) return;
+  n.said ||= new Set();
+  const step = CALLOUTS.find((c) => dist <= c && dist > c * 0.6 && !n.said.has(c));
+  if (step) { n.said.add(step); CALLOUTS.filter((c) => c > step).forEach((c) => n.said.add(c)); say(`${spokenDist(dist)} to ${n.name.replace(/^(Route|Follow|TrackBack): /, '')}, heading ${CARD_WORDS[cardinal(brg)] || ''}`); }
+}
+
+/* ---------- v4: tap the map to hide / show the buttons ---------- */
+let chromeHintShown = false;
+function toggleChrome(force) {
+  const hide = force ?? !document.body.classList.contains('hidechrome');
+  document.body.classList.toggle('hidechrome', hide);
+  act.log('tap', hide ? 'buttons hidden (map tap)' : 'buttons shown (map tap)');
+  map.resize();
+  let h = $('chromeHint');
+  if (hide && !chromeHintShown) {
+    chromeHintShown = true;
+    if (!h) { h = document.createElement('div'); h.id = 'chromeHint'; $('app').appendChild(h); }
+    h.textContent = 'Tap the map to show the buttons'; h.hidden = false; setTimeout(() => { h.hidden = true; }, 3000);
+  } else if (h) h.hidden = true;
+}
+
+/* ---------- v4: phone "More" menu ---------- */
+function moreSheet() {
+  openSheet('More', `<div class="toolgrid">
+    <button data-a="back"><i>↶</i>TrackBack</button>
+    <button data-a="search"><i>⌕</i>Search &amp; places</button>
+    <button data-a="maps"><i>🛰</i>Maps &amp; layers</button>
+    <button data-a="sos" class="sos"><i>SOS</i>Emergency</button>
+    <button data-a="wx"><i>🌡</i>Weather</button>
+    <button data-a="tools"><i>⚙</i>Settings &amp; tools</button>
+  </div>`, { back: trackBackSheet, search: () => searchSheet(), maps: () => mapsSheet(), sos: sosSheet, wx: weatherSheet, tools: toolsSheet });
+}
+
+/* ---------- v4: in-app updates of the app itself ---------- */
+const APP_RELEASE = () => `https://api.github.com/repos/${S.updateRepo}/releases/tags/app-latest`;
+const ASSET = (name) => `https://github.com/${S.updateRepo}/releases/download/app-latest/${name}`;
+async function checkAppUpdate(manual = false) {
+  if (!S.updateRepo) return null;
+  const info = await native.appInfo();
+  if (!info && !manual) return null; // browser / iPad: nothing to install
+  let rel;
+  try { rel = await tiles.netJSON(APP_RELEASE(), 20000); } catch (e) { if (manual) toast(`Could not check for a new app version (${e.message})`); return null; }
+  const body = rel?.body || '';
+  const code = +(body.match(/versionCode:\s*(\d+)/)?.[1] || 0);
+  const cert = body.match(/cert:\s*([0-9a-f]{64})/i)?.[1]?.toLowerCase();
+  const name = (rel?.name || '').replace(/^Rimal app\s*/, '');
+  const apk = (rel?.assets || []).find((a) => a.name.endsWith('.apk'));
+  const res = { name, code, cert, size: apk?.size, installed: info, newer: !!(info && code > (info.versionCode || 0)), sameKey: !cert || !info?.certSha256 || cert === info.certSha256 };
+  state.appUpdate = res;
+  act.log('update', `app version check: installed ${info?.versionName || '?'} (${info?.versionCode || '?'}), latest ${name} (${code})`, { sameKey: res.sameKey });
+  if (res.newer && !manual && S.appUpdateDismissed !== code) showAppUpdateBanner(res);
+  return res;
+}
+function showAppUpdateBanner(res) {
+  $('appUpdTxt').textContent = `New Rimal version ${res.name} is ready`;
+  $('appUpd').hidden = false;
+  $('appUpdGo').onclick = () => { $('appUpd').hidden = true; appUpdateSheet(); };
+  $('appUpdX').onclick = () => { $('appUpd').hidden = true; setS('appUpdateDismissed', res.code); };
+}
+async function appUpdateSheet() {
+  openSheet('App update', '<p class="note">Checking…</p>');
+  const r = await checkAppUpdate(true);
+  const inst = r?.installed;
+  if (!inst) return openSheet('App update', `<p class="note">In-app updates work in the Android app. Latest version: <b>${esc(r?.name || '?')}</b>.</p><div class="btns"><a class="btn btnlink" href="${ASSET('Rimal-OffRoad.apk')}">Download the APK</a></div>`);
+  openSheet('App update', `
+    <div class="grid stats"><div class="cell"><label>Installed</label><b>${esc(inst.versionName || '?')}</b></div><div class="cell"><label>Latest</label><b>${esc(r.name || '?')}</b></div><div class="cell"><label>Download</label><b>${r.size ? gb(r.size) : '—'}</b></div></div>
+    ${r.newer ? '' : '<p class="note">You have the latest version.</p>'}
+    ${r.newer && !r.sameKey ? '<p class="warnbox">This version is signed with the new permanent key, so Android will not install it over your current copy. Do this once: <b>Settings &amp; tools → Backup</b>, then uninstall Rimal, install the new version and restore the backup. Keep your USB map files to import again. Every update after that installs straight over the top.</p>' : ''}
+    ${r.newer ? '<p class="note">Rimal downloads the new version and hands it to Android’s installer. Your trips, waypoints, settings and maps are kept. The first time, Android asks you to allow Rimal to install apps — allow it, come back and tap Update again.</p>' : ''}
+    <div class="progress" id="auProg" hidden><div></div></div><p id="auTxt" class="note"></p>
+    <div class="btns">${r.newer ? '<button class="primary" data-a="go">⬇ Update now</button>' : ''}<button class="btn" data-a="re">Check again</button></div>`, {
+    go: () => installAppUpdate(r),
+    re: appUpdateSheet,
+  });
+}
+async function installAppUpdate(r) {
+  const bar = $('auProg'), txt = $('auTxt');
+  try {
+    bar.hidden = false; act.log('update', `downloading app ${r.name}`);
+    const path = await native.download(ASSET('Rimal-OffRoad.apk'), 'Rimal-update.apk', (p, b) => { bar.firstChild.style.width = `${Math.round(p * 100)}%`; txt.textContent = `Downloading ${gb(b)}${r.size ? ' of ' + gb(r.size) : ''}…`; });
+    txt.textContent = 'Opening Android’s installer…';
+    const res = await native.installApk(path);
+    if (res?.needsPermission) txt.innerHTML = '<b>Allow “Install unknown apps” for Rimal</b> in the screen that just opened, then come back and tap Update now again.';
+    else txt.textContent = 'Follow Android’s installer. Rimal restarts on the new version.';
+  } catch (e) { txt.textContent = `Update failed: ${e.message}`; act.log('error', `app update failed: ${e.message}`); }
+}
+
+/* ---------- v4: user manual (PDF, always the latest) ---------- */
+async function openManual() {
+  const url = ASSET('Rimal-User-Manual.pdf');
+  if (!native.isNative) { window.open(url, '_blank'); return; }
+  toast('Opening the manual…');
+  try {
+    const path = await native.download(url, 'Rimal-User-Manual.pdf');
+    await native.openFile(path, 'application/pdf');
+  } catch (e) {
+    try { const { Filesystem, Directory } = await import('@capacitor/filesystem'); const { uri } = await Filesystem.getUri({ path: 'Rimal-User-Manual.pdf', directory: Directory.Cache }); await Filesystem.stat({ path: 'Rimal-User-Manual.pdf', directory: Directory.Cache }); await native.openFile(uri); }
+    catch { toast(`Could not open the manual (${e.message}). It needs internet the first time.`, 6000); }
+  }
+}
+
+/* ---------- v4: vehicle service checklist ---------- */
+const SERVICE_DEFAULTS = [
+  ['Engine oil & filter', 10000, 6, 'Every 5,000 km if you do a lot of sand driving'],
+  ['Air filter', 10000, 12, 'Check after every dusty trip'],
+  ['Cabin (AC) filter', 20000, 12, ''],
+  ['Fuel filter', 40000, 24, ''],
+  ['Tyre rotation', 10000, 6, 'Include the spare'],
+  ['Wheel alignment & balance', 20000, 12, 'Also after hard hits'],
+  ['Brake pads & discs check', 10000, 6, ''],
+  ['Brake fluid', 40000, 24, ''],
+  ['Coolant', 80000, 48, ''],
+  ['Automatic transmission fluid', 60000, 48, ''],
+  ['Transfer case oil', 40000, 24, ''],
+  ['Front & rear differential oil', 40000, 24, ''],
+  ['Grease propeller shafts', 10000, 6, ''],
+  ['Spark plugs', 100000, 72, ''],
+  ['Drive belts check', 40000, 24, ''],
+  ['Battery check', 0, 12, 'Heat kills batteries in KSA'],
+  ['Wiper blades', 0, 12, ''],
+  ['AC service', 0, 24, ''],
+].map(([name, km, months, note], i) => ({ id: 'svc' + i, name, km, months, note, lastKm: null, lastDate: null }));
+async function serviceSheet() {
+  const d = (await store.get('kv', 'service')) || { odo: null, odoGps: null, items: SERVICE_DEFAULTS };
+  const save = () => store.put('kv', d, 'service');
+  const odoNow = d.odo != null ? Math.round(d.odo + (S.odometer - (d.odoGps ?? S.odometer)) / 1000) : null;
+  const MONTH = 30.44 * 86400e3;
+  const status = (it) => {
+    if (it.lastKm == null && !it.lastDate) return { cls: '', txt: 'not recorded yet', score: 1.5 };
+    const kmLeft = it.km && it.lastKm != null && odoNow != null ? it.lastKm + it.km - odoNow : Infinity;
+    const msLeft = it.months && it.lastDate ? it.lastDate + it.months * MONTH - Date.now() : Infinity;
+    const parts = [];
+    if (kmLeft !== Infinity) parts.push(kmLeft >= 0 ? `${kmLeft.toLocaleString()} km left` : `${(-kmLeft).toLocaleString()} km overdue`);
+    if (msLeft !== Infinity) parts.push(msLeft >= 0 ? `${Math.round(msLeft / MONTH * 10) / 10} months left` : `${Math.round(-msLeft / MONTH * 10) / 10} months overdue`);
+    const over = kmLeft < 0 || msLeft < 0, soon = kmLeft < Math.max(1000, it.km * 0.1) || msLeft < MONTH;
+    return { cls: over ? 'over' : soon ? 'soon' : 'ok', txt: parts.join(' · ') || 'done', score: over ? 0 : soon ? 1 : 2 };
+  };
+  const items = [...d.items].sort((a, b) => status(a).score - status(b).score);
+  const due = items.filter((it) => ['over', 'soon'].includes(status(it).cls)).length;
+  openSheet('Service checklist', `
+    <div class="grid2"><div class="field"><label>Car odometer now (km)</label><input type="number" id="svOdo" inputmode="numeric" value="${odoNow ?? ''}" placeholder="read it from the dashboard"></div>
+    <div class="field"><label>&nbsp;</label><button class="btn" data-a="odo">Save odometer</button></div></div>
+    <p class="note">${odoNow != null ? `Rimal adds the distance you drive with it, so this stays roughly right — correct it from the dashboard now and then.` : 'Enter the odometer once; Rimal keeps it up to date from your drives.'} ${due ? `<b style="color:#ffb020">${due} item${due > 1 ? 's' : ''} due.</b>` : ''} Intervals are typical for a Land Cruiser — set them from your service book.</p>
+    ${items.map((it) => { const s = status(it); return `<div class="row svc ${s.cls}"><div class="grow"><div class="title">${esc(it.name)}</div><div class="sub">${s.txt} · every ${[it.km ? it.km.toLocaleString() + ' km' : '', it.months ? it.months + ' months' : ''].filter(Boolean).join(' or ')}${it.lastDate ? ` · last ${new Date(it.lastDate).toLocaleDateString()}${it.lastKm != null ? ' at ' + it.lastKm.toLocaleString() + ' km' : ''}` : ''}${it.note ? ' · ' + esc(it.note) : ''}</div></div><button class="btn sm" data-a="done" data-id="${it.id}">✓ Done</button><button class="btn sm" data-a="edit" data-id="${it.id}">✎</button></div>`; }).join('')}
+    <div class="btns" style="margin-top:12px"><button class="btn" data-a="add">+ Add item</button></div>`, {
+    odo: async () => { const v = +$('svOdo').value; if (!v) return toast('Enter the odometer reading'); d.odo = v; d.odoGps = S.odometer; await save(); toast('Odometer saved'); serviceSheet(); },
+    done: async (id) => { const it = d.items.find((x) => x.id === id); it.lastDate = Date.now(); it.lastKm = odoNow; await save(); act.log('data', `service done: ${it.name}`, { km: odoNow }); toast(`${it.name} — recorded${odoNow == null ? ' (enter the odometer to track km too)' : ''}`); serviceSheet(); },
+    edit: async (id) => {
+      const it = d.items.find((x) => x.id === id);
+      const km = await prompt(it.name, 'Interval in km (0 = by time only)', String(it.km || 0)); if (km == null) return serviceSheet();
+      const mo = await prompt(it.name, 'Interval in months (0 = by km only)', String(it.months || 0)); if (mo == null) return serviceSheet();
+      const last = await prompt(it.name, 'Last done at odometer km (leave empty if unknown)', it.lastKm != null ? String(it.lastKm) : '');
+      it.km = +km || 0; it.months = +mo || 0; if (last != null && last !== '') { it.lastKm = +last; it.lastDate ||= Date.now(); }
+      await save(); serviceSheet();
+    },
+    add: async () => { const t = await prompt('Add service item', 'Name', ''); if (t) { d.items.push({ id: 'my' + store.uid(), name: t, km: 10000, months: 12, note: '', lastKm: null, lastDate: null }); await save(); } serviceSheet(); },
+  });
+}
+
+/* ---------- v4: Saudi-only map packs ---------- */
+const KSA_BOX = [34.4, 16.3, 55.7, 32.2];
+const inKSA = (lon, lat) => lon >= KSA_BOX[0] && lon <= KSA_BOX[2] && lat >= KSA_BOX[1] && lat <= KSA_BOX[3];
+function outsideKSA() {
+  const f = state.fix; if (!f || S.demoGps) return false;
+  return !inKSA(f.lon, f.lat);
+}
+
 /* ---------- Field-test report ---------- */
 function reportSheet() {
   openSheet('Test report', `
@@ -1518,6 +1724,8 @@ function settingsSheet() {
     <label class="toggle"><span><b>Night-vision screen</b> (quick switch: ☾ button on the map)</span><input type="checkbox" id="sTintOn" ${S.redMode ? 'checked' : ''}></label>
     ${tintControls()}
     <label class="toggle"><span><b>Lite mode</b> — faster on car screens (fewer labels, no contours or 3D, lower drawing resolution)</span><input type="checkbox" id="sLite" ${S.lite ? 'checked' : ''}></label>
+    <label class="toggle"><span><b>Voice guidance</b> — distances, arrival and warnings spoken aloud</span><input type="checkbox" id="sVoice" ${S.voice ? 'checked' : ''}></label>
+    <div class="btns" style="margin:4px 0 10px"><button class="btn sm" data-a="vtest">🔊 Test voice</button></div>
     <label class="toggle"><span>Highlight desert tracks from the map (orange dashes)</span><input type="checkbox" id="sTracks" ${S.highlightTracks ? 'checked' : ''}></label>
     <label class="toggle"><span>Heat warning (45 °C and above, from the saved forecast)</span><input type="checkbox" id="sHeat" ${S.heatWarn ? 'checked' : ''}></label>
     <label class="toggle"><span>Activity recorder (for finding bugs — stays on this unit)</span><input type="checkbox" id="sAct" ${S.activityLog !== false ? 'checked' : ''}></label>
@@ -1526,6 +1734,7 @@ function settingsSheet() {
     <p class="note">Tip: tap any data box on the left to choose what it shows.</p>
     <p class="note" style="margin-top:16px">Rimal Off-Road Navigator v3.0 · Map data © OpenStreetMap contributors · Imagery: ${tiles.satSource().attribution.replace(/<[^>]+>/g, '')} · Terrain: Mapzen/AWS · Weather: Open-Meteo.</p>`, {
     ...tintHandlers(settingsSheet),
+    vtest: () => say('In 2 kilometres, Elephant Rock, heading north-east', true),
     set: (id) => {
       const [k, v] = id.split(':'); setS(k, isNaN(+v) ? v : +v); updateDash(); settingsSheet();
       if (k === 'vehicleIcon' && meMarker) { const el = meMarker.getElement(); el.className = v === 'arrow' ? 'me' : 'me car'; el.innerHTML = v === 'arrow' ? ARROW_SVG : CRUISER_SVG; }
@@ -1533,6 +1742,7 @@ function settingsSheet() {
   });
   $('sAuto').onchange = (e) => setS('autoRecord', e.target.checked);
   $('sTintOn').onchange = (e) => setRedMode(e.target.checked);
+  $('sVoice').onchange = (e) => { setS('voice', e.target.checked); if (e.target.checked) say('Voice guidance on', true); };
   $('sTracks').onchange = (e) => setS('highlightTracks', e.target.checked, true);
   $('sHeat').onchange = (e) => setS('heatWarn', e.target.checked);
   $('sAct').onchange = (e) => { setS('activityLog', e.target.checked); act.setEnabled(e.target.checked); };
@@ -1583,6 +1793,7 @@ async function boot() {
   S = await withTimeout(store.loadSettings(), 8000, 'Loading settings', { ...store.DEFAULTS });
   marks.settings = Math.round(performance.now());
   // One-time switch to the faster setup after the first field test on a head unit (Android 10, slow GPU).
+  if (!S.v4Migrated) { for (const [k, v] of Object.entries({ autoRecord: false, v4Migrated: true })) { S[k] = v; store.saveSetting(k, v); } }
   if (!S.liteMigrated) {
     for (const [k, v] of Object.entries({ lite: true, contours: false, hillshade: false, terrain3d: false, lang: 'en', liteMigrated: true })) { S[k] = v; store.saveSetting(k, v); }
   }
@@ -1611,8 +1822,10 @@ async function boot() {
   map.once('idle', () => { marks.firstIdle = Math.round(performance.now()); console.log('RIMAL_TIMING ' + JSON.stringify(marks)); });
   map.addControl(new maplibregl.ScaleControl({ unit: S.units === 'imperial' ? 'imperial' : 'metric' }), 'bottom-left');
   map.once('style.load', () => { applyTerrain(); refreshOverlays(); });
+  // Keep the map credits folded into the (i) button so they don't cover the map on phones.
+  map.once('load', () => document.querySelectorAll('.maplibregl-compact-show').forEach((el) => el.classList.remove('maplibregl-compact-show')));
   updateNoMapHint();
-  window.__rimal = { act, planNight, map, state, S, gps, tiles, packs, store, native, checkUpdates, setS, applyStyle, stopRecording, startRoute, startGoto, refreshWeather, attitude, buildReport: (note) => buildReport({ state, S, map, tiles, attitude, native }, note), marks };
+  window.__rimal = { act, planNight, updateNoMapHint, checkAppUpdate, say, map, state, S, gps, tiles, packs, store, native, checkUpdates, setS, applyStyle, stopRecording, startRoute, startGoto, refreshWeather, attitude, buildReport: (note) => buildReport({ state, S, map, tiles, attitude, native }, note), marks };
 
   // Log map errors as readable text (default handler prints "[object Object]" in Android logs).
   let mapErrs = 0;
@@ -1624,10 +1837,11 @@ async function boot() {
   map.on('click', (e) => {
     if (state.plan) { state.plan.points.push([e.lngLat.lng, e.lngLat.lat]); refreshPlan(); renderPlanBar(); return; }
     const f = map.queryRenderedFeatures(e.point, { layers: ['wpts', 'rimal-pois'].filter((l) => map.getLayer(l)) })[0];
-    if (!f) return;
+    if (!f) { if (document.querySelector('.maplibregl-popup')) return; clearTimeout(chromeT); chromeT = setTimeout(() => toggleChrome(), 280); return; }
     if (f.layer.id === 'wpts') { const w = state.waypoints.find((x) => x.id === f.properties.id); if (w) showPointPopup({ lng: w.lon, lat: w.lat }, w.name, w); }
     else showPointPopup({ lng: f.geometry.coordinates[0], lat: f.geometry.coordinates[1] }, f.properties.name);
   });
+  map.on('dblclick', () => clearTimeout(chromeT));
   map.on('contextmenu', (e) => { if (!state.plan) showPointPopup(e.lngLat, 'Selected point'); });
   let lp;
   map.on('touchstart', (e) => { if (e.points.length !== 1 || state.plan) return; const ll = e.lngLat; lp = setTimeout(() => showPointPopup(ll, 'Selected point'), 650); });
@@ -1641,6 +1855,8 @@ async function boot() {
   $('bLib').onclick = tripsSheet;
   $('bMaps').onclick = () => mapsSheet();
   $('bTools').onclick = toolsSheet;
+  $('bMore').onclick = moreSheet;
+  $('noMapLater').onclick = () => { state.noMapDismissed = true; updateNoMapHint(); toast('Maps → Updates & files whenever you are ready'); };
   $('noMapBtn').onclick = () => { mapsTab = 'updates'; mapsSheet(); };
   $('noMapDl').onclick = () => { if (S.autoUpdate === 'off' || S.autoUpdate === 'wifi') setS('autoUpdate', 'any'); checkUpdates(true); };
   $('navStop').onclick = stopNav;
@@ -1683,6 +1899,9 @@ async function boot() {
   updateDash();
   setInterval(() => { updateDash(); store.saveSetting('odometer', S.odometer); }, 5000);
   native.keepAwake();
+  const unfinished = state.areas.filter((a) => a.status === 'downloading' || a.status === 'partial');
+  if (unfinished.length) setTimeout(() => toast(`“${unfinished[0].name}” didn’t finish downloading — Maps → Satellite & areas → Continue`, 7000), 4000);
+  setTimeout(() => { if (navigator.onLine !== false) checkAppUpdate(false).catch(() => {}); }, 20000);
   gps.start(S.demoGps);
   act.startHeartbeat(() => ({ zoom: +map.getZoom().toFixed(1), follow: state.follow, rec: state.rec.active ? state.rec.points.length : 0, nav: !!state.nav, online: tiles.isOnline(), gps: $('gpsState').textContent, acc: state.fix ? Math.round(state.fix.acc) : null, fixAgeS: state.fix ? Math.round((Date.now() - state.fix.t) / 1000) : null }));
 
