@@ -94,6 +94,7 @@ export const DEFAULTS = {
   voice: false,             // spoken navigation and warnings
   voiceRate: 1,
   appUpdateDismissed: 0,
+  packSkip: [],             // map packs not to download (e.g. far-away satellite regions)
   autoRecord: false,        // recording starts only when you tap Record
   activityLog: true,        // on-device activity recorder for finding bugs
   tankL: 0,                 // fuel tank size in litres (fuel log range estimate)

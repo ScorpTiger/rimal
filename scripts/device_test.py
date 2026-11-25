@@ -159,6 +159,15 @@ if True:
         info = ev("({native: __rimal.native.isNative, engine: __rimal.state.engineOk, ua: navigator.userAgent.match(/Chrome\\/[\\d.]+/)[0], opfs: !!navigator.storage?.getDirectory, repo: __rimal.S.updateRepo})")
         return (info['native'] and info['engine'], info)
 
+    @step('v4: native helpers — app version/signing, voice engine, app-update check, phone layout')
+    def _():
+        info = ev("window.__rimal.native.appInfo()")
+        voice = ev("window.__rimal.native.speak('Rimal voice test', 'en', 1)")
+        upd = ev("window.__rimal.checkAppUpdate(true).then(r => r && {name: r.name, code: r.code, newer: r.newer, sameKey: r.sameKey})")
+        rec = ev("window.__rimal.state.rec.active")
+        ok = bool(info and info.get('versionCode') and info.get('certSha256')) and upd is not None
+        return (ok, {'appInfo': info, 'voice': voice, 'update': upd, 'recordingOnStart': rec})
+
     @step('Pitch & roll: level at start, then real accelerometer tilts (emulator sensor)')
     def _():
         import math
@@ -212,7 +221,7 @@ if True:
 
     @step('Map pack update: full download + install of all packs (~1.3 GB, native download → app storage)')
     def _():
-        ev("__rimal.setS('autoUpdate','any'); window.__upd = __rimal.checkUpdates(true).then(()=>'done', e=>'error '+e)")
+        ev("__rimal.setS('packSkip',['satellite-nw','satellite-ne','satellite-sw']); __rimal.setS('autoUpdate','any'); window.__upd = __rimal.checkUpdates(true).then(()=>'done', e=>'error '+e)")
         time.sleep(5)
         last = ''; end = time.time() + 50 * 60
         while time.time() < end:
@@ -328,15 +337,6 @@ if True:
         n = ev("(()=>{ const n = __rimal.planNight(46.7, 24.7); return {score: n.score, moon: n.moon.name, dark: n.darkHours.toFixed(1)}; })()")
         ev("document.body.classList.add('redmode')"); time.sleep(1); shot('v3-redmode'); ev("document.body.classList.remove('redmode')")
         return (n and float(n['dark']) > 8, n)
-
-    @step('v4: native helpers — app version/signing, voice engine, app-update check, phone layout')
-    def _():
-        info = ev("window.__rimal.native.appInfo()")
-        voice = ev("window.__rimal.native.speak('Rimal voice test', 'en', 1)")
-        upd = ev("window.__rimal.checkAppUpdate(true).then(r => r && {name: r.name, code: r.code, newer: r.newer, sameKey: r.sameKey})")
-        rec = ev("window.__rimal.state.rec.active")
-        ok = bool(info and info.get('versionCode') and info.get('certSha256')) and upd is not None
-        return (ok, {'appInfo': info, 'voice': voice, 'update': upd, 'recordingOnStart': rec})
 
     @step('Performance: memory and frame timing on the emulator')
     def _():

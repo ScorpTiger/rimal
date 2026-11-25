@@ -277,7 +277,8 @@ async function checkUpdates(manual = false) {
     const installed = installedVersions();
     // A pack copied in by USB keeps the published file name (no date); it is the same file if the size matches.
     const sameFile = (r) => Object.values(state.maps).some((m) => m.version === '00000000' && packs.keyOfFile(m.name, m.kind) === r.key && m.size === r.size);
-    const todo = Object.values(remote).filter((r) => (!installed[r.key] || installed[r.key][0] < r.version) && !sameFile(r));
+    // Packs the user switched off (e.g. far-away satellite regions on a small car screen) are left out.
+    const todo = Object.values(remote).filter((r) => (!installed[r.key] || installed[r.key][0] < r.version) && !sameFile(r) && !(S.packSkip || []).includes(r.key));
     if (!todo.length) { setUpdateMsg(''); if (manual) toast('Maps are up to date'); return; }
     let changed = false;
     for (const item of todo) {
@@ -1116,7 +1117,8 @@ async function mapsSheet() {
       <p class="note">${state.update.msg || (S.lastUpdateCheck ? 'Last checked ' + new Date(S.lastUpdateCheck).toLocaleString() : 'Not checked yet')}</p>
       ${[...new Set([...Object.keys(packs.KINDS), ...Object.keys(state.remote || {}), ...Object.keys(inst)])].sort().map((k) => {
         const v = inst[k] || []; const r = state.remote?.[k];
-        return `<div class="row"><div class="grow"><div class="title">${packs.label(k)}</div><div class="sub">${v.length ? 'In use: ' + fmtVer(v[0]) + (v[1] ? ' · backup: ' + fmtVer(v[1]) : '') : 'Not installed'}${r ? ` · latest online: ${fmtVer(r.version)} (${gb(r.size)})` : ''}</div></div></div>`;
+        const skip = (S.packSkip || []).includes(k);
+        return `<div class="row"><div class="grow"><div class="title">${packs.label(k)}</div><div class="sub">${v.length ? 'In use: ' + fmtVer(v[0]) + (v[1] ? ' · backup: ' + fmtVer(v[1]) : '') : 'Not installed'}${r ? ` · latest online: ${fmtVer(r.version)} (${gb(r.size)})` : ''}${skip ? ' · <b>not downloaded</b>' : ''}</div></div><label class="toggle mini" title="Download and update this pack"><input type="checkbox" data-pack="${k}" ${skip ? '' : 'checked'}></label></div>`;
       }).join('')}
       <h3>Files on this unit</h3>
       ${files.length ? files.map((m) => `<div class="row"><div class="grow"><div class="title">${esc(m.name)}</div><div class="sub">${m.kind} · zoom ${m.minZoom}–${m.maxZoom} · ${gb(m.size)}${S.baseMap === m.name ? ' · <b>ACTIVE</b>' : ''}</div></div>${m.kind === 'vector' && S.baseMap !== m.name ? `<button class="btn sm" data-a="usebase" data-id="${m.name}">Use</button>` : ''}<button class="btn sm danger" data-a="mdel" data-id="${m.name}">✕</button></div>`).join('') : '<div class="empty">No offline map files yet</div>'}
@@ -1155,6 +1157,7 @@ async function mapsSheet() {
   on('mWpts', (e) => { setS('showWaypoints', e.target.checked); refreshOverlays(); });
   on('mCache', (e) => { setS('cacheWhileBrowsing', e.target.checked); tiles.configure({ cacheWhileBrowsing: S.cacheWhileBrowsing }); });
   on('mCustom', (e) => { setS('customSatUrl', e.target.value.trim()); tiles.configure({ customUrl: S.customSatUrl }); applyStyle(); });
+  $('sheetBody').querySelectorAll('[data-pack]').forEach((el) => (el.onchange = () => { const k = el.dataset.pack; const set = new Set(S.packSkip || []); el.checked ? set.delete(k) : set.add(k); setS('packSkip', [...set]); }));
   on('uRepo', saveUpdateFields); on('uTok', saveUpdateFields);
   const op = $('mSatOp'); if (op) op.oninput = (e) => { S.satOpacity = +e.target.value; if (map.getLayer('satellite')) map.setPaintProperty('satellite', 'raster-opacity', S.satOpacity); store.saveSetting('satOpacity', S.satOpacity); };
   document.querySelectorAll('input[name=satsrc]').forEach((r) => (r.onchange = () => { setS('satSource', r.value); tiles.configure({ satSource: S.satSource }); applyStyle(); mapsSheet(); }));
