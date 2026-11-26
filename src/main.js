@@ -15,6 +15,7 @@ import { Attitude, gaugeSVG } from './sensors.js';
 import { CRUISER_SVG, ARROW_SVG } from './vehicle.js';
 import * as act from './activity.js';
 import { RoadMatcher, BiasLearner } from './matcher.js';
+import { writePMTiles } from './pmwriter.js';
 import { planNight, nextNights } from './stars.js';
 import { fuelStats, rangeFrom, defaultChecklist, filesFromZip } from './triptools.js';
 import { sunTimes, hhmm, weather, WX, POI_CATS, setPOIs, poiCount, nearest, search as poiSearch, poiGeoJSON, profileSVG } from './extras.js';
@@ -195,6 +196,12 @@ function updateNoMapHint() {
     : online
       ? 'This screen has internet: download the offline maps of Saudi Arabia now (about 1.3 GB, once). After that Rimal works with no internet at all.'
       : '<b>No internet on this screen.</b> Connect it once to Wi-Fi or your phone’s hotspot, then tap Download — or copy the map files from the GitHub Releases page to a USB stick and import them. GPS, trips and navigation already work.';
+  // Some packs are in, but not the street map: say exactly what's missing.
+  const kinds = new Set(Object.values(state.maps).map((m) => m.kind));
+  if (kinds.size) {
+    $('noMap').querySelector('h2').textContent = 'Street map not installed yet';
+    $('noMapText').innerHTML = `Installed: <b>${[...kinds].map((k) => ({ satellite: 'satellite imagery', terrain: 'terrain' }[k] || k)).join(', ')}</b>. Missing: the street &amp; track map <b>ksa-map.pmtiles</b> (956 MB). Import it from USB, or tap Download.${state.lastImportFail ? `<br><span style="color:#ffb020">Last import: ${esc(state.lastImportFail)}</span>` : ''}`;
+  }
   $('noMapDl').disabled = !!state.update.busy;
   $('noMapProg').textContent = state.update.msg || state.update.lastError || '';
 }
@@ -478,9 +485,10 @@ function tiltSheet() {
     <div class="gauges"><div>${gaugeSVG(attitude.pitch, 'side', S.pitchWarn)}<p>Pitch (nose up/down)</p></div><div>${gaugeSVG(attitude.roll, 'rear', S.rollWarn)}<p>Roll (side tilt)</p></div></div>
     ${avail ? '' : '<p class="note">No motion sensor reported by this head unit yet. If your unit has one, readings appear here automatically; otherwise pitch & roll need a phone-based or external sensor.</p>'}
     <p class="note">${attitude.cal?.auto ? 'Level was set automatically when Rimal started. ' : ''}Park on level ground and press <b>Calibrate</b> so the unit’s mounting angle reads as 0°. Works with the screen upright, tilted or flat.</p>
-    <div class="btns" style="margin-bottom:14px"><button class="primary" data-a="cal">Calibrate (set level)</button><button class="btn" data-a="toggle">${S.showTilt ? 'Hide' : 'Show'} gauges on map</button></div>
+    <div class="btns" style="margin-bottom:14px"><button class="primary" data-a="cal">Level now (set 0°)</button><button class="btn" data-a="calreset">Reset calibration</button><button class="btn" data-a="toggle">${S.showTilt ? 'Hide' : 'Show'} gauges on map</button></div>
     <div class="field"><label>Pitch warning</label>${segHtml('pitchWarn', [[20, '20°'], [25, '25°'], [30, '30°'], [35, '35°'], [40, '40°']])}</div>
     <div class="field"><label>Roll warning</label>${segHtml('rollWarn', [[15, '15°'], [20, '20°'], [25, '25°'], [30, '30°'], [35, '35°']])}</div>`, {
+    calreset: () => { attitude.setCalibration(null); S.tiltCal = null; store.saveSetting('tiltCal', null); act.log('data', 'pitch/roll calibration reset'); toast('Calibration cleared — Rimal levels itself again in a moment. Park level, then tap Level now for the most accurate zero.', 6000); setTimeout(tiltSheet, 1500); },
     cal: () => { if (!attitude.available) return toast('No motion sensor readings yet'); S.tiltCal = attitude.calibrate(); store.saveSetting('tiltCal', S.tiltCal); toast('Level set — this mounting now reads 0°'); tiltSheet(); },
     toggle: () => { setS('showTilt', !S.showTilt); $('tilt').hidden = !S.showTilt; tiltSheet(); },
     set: (id) => { const [k, v] = id.split(':'); setS(k, +v); tiltSheet(); },
@@ -1110,17 +1118,61 @@ const dateStamp = () => new Date().toISOString().slice(0, 10);
 
 async function backup() {
   const settings = { ...S }; delete settings.updateToken;
-  const data = { rimalBackup: 2, at: new Date().toISOString(), tracks: state.tracks, waypoints: state.waypoints, areas: state.areas, settings };
+  const kv = {};
+  for (const k of ['fuellog', 'service', 'checklist']) { const v = await store.get('kv', k); if (v != null) kv[k] = v; }
+  const data = { rimalBackup: 3, at: new Date().toISOString(), tracks: state.tracks, waypoints: state.waypoints, areas: state.areas, settings, kv };
   const where = await native.saveText(`rimal-backup-${dateStamp()}.json`, JSON.stringify(data));
   toast(where ? `Backup saved to ${where}` : 'Backup downloaded', 5000);
+}
+function backupSheet() {
+  const areas = state.areas.filter((a) => a.tiles || a.done);
+  openSheet('Backup & restore', `
+    <h3>Your data</h3>
+    <p class="note">One small file with all trips, routes, waypoints, settings, the <b>fuel log</b>, the <b>service checklist</b> and the trip checklist. Saved in <b>Documents/Rimal</b>, so it survives an uninstall. Restore it here on this or another unit.</p>
+    <div class="btns"><button class="primary" data-a="b">💾 Save data backup</button><button class="btn" data-a="r">Restore from file</button></div>
+    <h3>Downloaded areas (zoom 15–18 imagery)</h3>
+    <p class="note">Save an area as a map file in Documents/Rimal. It survives an uninstall, and you can copy it to a USB stick and import it on the car screen like the other map files (Maps → Updates &amp; files → Import). The big Saudi map packs are already on your USB stick, so they are not copied again.</p>
+    ${areas.length ? areas.map((a) => `<div class="row"><div class="grow"><div class="title">${esc(a.name)}</div><div class="sub">up to zoom ${a.maxZoom} · ${(a.tiles || a.done || 0).toLocaleString()} tiles · ${gb(a.bytes)}</div></div><button class="btn sm" data-a="xa" data-id="${a.id}">⤓ Save as map file</button></div>`).join('') : '<div class="empty">No downloaded areas yet.</div>'}
+    <div class="progress" id="xProg" hidden><div></div></div><p id="xTxt" class="note"></p>`, {
+    b: backup, r: () => pickFile('.json,application/json', importFiles, false),
+    xa: (id) => exportArea(state.areas.find((x) => x.id === id)),
+  });
+}
+async function exportArea(area) {
+  const bar = $('xProg'), txt = $('xTxt'); bar.hidden = false;
+  const slug = area.name.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'area';
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const saved = [];
+  try {
+    for (const layer of area.layers || ['sat']) {
+      const kind = layer === 'sat' ? 'satellite' : 'terrain';
+      const name = `ksa-${kind}-area-${slug}-${date}.pmtiles`;
+      txt.textContent = `Preparing ${kind === 'satellite' ? 'imagery' : 'terrain'}…`;
+      const w = await native.binaryWriter(name);
+      const res = await writePMTiles({
+        tiles: tiles.areaTileList(area, layer), read: (z, x, y) => tiles.readStoredTile(layer, area.source, z, x, y), write: (u8) => w.write(u8),
+        meta: { name: `${area.name} (${kind})`, rimal_kind: kind, attribution: layer === 'sat' ? tiles.SAT_SOURCES[area.source]?.attribution || '' : 'Terrain: Mapzen / AWS terrain tiles', ...(layer === 'dem' ? { encoding: 'terrarium' } : {}) },
+        bounds: area.bbox, tileType: layer === 'sat' ? 3 : 2,
+        onProgress: (p) => { bar.firstChild.style.width = `${p * 100}%`; txt.textContent = `Saving ${kind}… ${Math.round(p * 100)}%`; },
+      }).catch((e) => { if (/no stored tiles/.test(e.message)) return null; throw e; });
+      if (res) saved.push(`${await w.close()} (${gb(res.bytes)})`);
+    }
+    act.log('data', `area exported: ${area.name}`, saved);
+    txt.innerHTML = saved.length ? `✅ Saved:<br>${saved.map(esc).join('<br>')}` : 'Nothing stored for this area yet.';
+  } catch (e) { txt.textContent = `Could not save: ${e.message}`; act.log('error', `area export failed: ${e.message}`); }
 }
 async function restoreBackup(b) {
   if (!(await confirmBox(`Restore backup from ${new Date(b.at).toLocaleString()}? Trips and waypoints are merged with what is on this device.`))) return;
   for (const t of b.tracks || []) { await store.put('tracks', t); if (!state.tracks.some((x) => x.id === t.id)) state.tracks.push(t); }
   for (const w of b.waypoints || []) { await store.put('waypoints', w); if (!state.waypoints.some((x) => x.id === w.id)) state.waypoints.push(w); }
-  for (const k of ['units', 'coordFormat', 'fields', 'fuelRange', 'pitchWarn', 'rollWarn', 'updateRepo', 'satSource', 'mapMode', 'lang']) if (b.settings?.[k] != null) setS(k, b.settings[k]);
+  for (const k of ['units', 'coordFormat', 'fields', 'fuelRange', 'pitchWarn', 'rollWarn', 'updateRepo', 'satSource', 'mapMode', 'lang', 'tankL', 'odometer', 'voice', 'tint', 'tintDim', 'roadSnap', 'gpsLearn', 'vehicleIcon', 'tripPeople', 'tripDays', 'packSkip']) if (b.settings?.[k] != null) setS(k, b.settings[k]);
+  // Fuel log, service checklist and trip checklist (backups from version 4.1 on).
+  for (const [k, v] of Object.entries(b.kv || {})) {
+    if (k === 'fuellog') { const cur = (await store.get('kv', 'fuellog')) || []; const ids = new Set(cur.map((x) => x.id)); await store.put('kv', [...cur, ...v.filter((x) => !ids.has(x.id))], 'fuellog'); }
+    else await store.put('kv', v, k);
+  }
   refreshOverlays(); renderFields(); updateDash();
-  toast(`Restored ${b.tracks?.length || 0} trips/routes and ${b.waypoints?.length || 0} waypoints`);
+  toast(`Restored ${b.tracks?.length || 0} trips/routes, ${b.waypoints?.length || 0} waypoints${b.kv?.fuellog ? `, ${b.kv.fuellog.length} fill-ups` : ''}${b.kv?.service ? ', service checklist' : ''}`, 6000);
 }
 
 /* ---------- Maps, imagery, downloads, updates ---------- */
@@ -1174,7 +1226,7 @@ async function mapsSheet() {
     area: () => areaSheet(),
     aview: (id) => { const a = state.areas.find((x) => x.id === id); closeSheet(); unfollow(); map.fitBounds([[a.bbox[0], a.bbox[1]], [a.bbox[2], a.bbox[3]]]); },
     arefresh: (id) => runAreaDownload(state.areas.find((x) => x.id === id), true),
-    acont: (id) => runAreaDownload(state.areas.find((x) => x.id === id), false),
+    acont: (id) => { const a = state.areas.find((x) => x.id === id); a.userStopped = false; runAreaDownload(a, false); },
     adel: async (id) => {
       const a = state.areas.find((x) => x.id === id);
       if (!(await confirmBox(`Delete the offline area “${esc(a.name)}”?`))) return;
@@ -1244,26 +1296,60 @@ function areaSheet() {
   $('aSat').onchange = est; $('aDem').onchange = est; est();
 }
 let areaAbort;
-async function runAreaDownload(area, refresh) {
+let areaRunning = null;
+function areaPill(area, p, s) {
+  const el = $('areaPill');
+  if (!area) { el.hidden = true; return; }
+  el.hidden = false;
+  el.innerHTML = `⬇ ${esc(area.name)} · ${Math.round(p * 100)}%${s ? ` · ${s.done.toLocaleString()}/${s.total.toLocaleString()}` : ''}<div class="bar"><div style="width:${p * 100}%"></div></div>`;
+  el.onclick = () => areaProgressSheet(area);
+}
+function areaProgressSheet(area) {
+  openSheet(`Downloading “${area.name}”`, `<div class="progress" id="dProg"><div style="width:${(areaRunning?.p || 0) * 100}%"></div></div><p id="dTxt">${areaRunning?.txt || 'Starting…'}</p><p class="note">Close this window and keep using the map — the download carries on and shows its progress on the left. If Rimal is closed or the car is switched off, it continues by itself next time Rimal is open with internet.</p><div class="btns"><button class="primary" data-a="hide">Use the map</button><button class="btn danger" data-a="cancel">Stop download</button></div>`, {
+    hide: closeSheet,
+    cancel: () => { area.userStopped = true; areaAbort?.abort(); closeSheet(); },
+  });
+}
+async function runAreaDownload(area, refresh, quiet = false) {
+  if (areaRunning) return areaProgressSheet(areaRunning.area);
   if (!tiles.isOnline()) return toast('No internet connection — connect to download. Your existing offline data stays in use.');
   areaAbort = new AbortController();
+  areaRunning = { area, p: 0, txt: '' };
   // Save the area before downloading, so it can be continued if the car is switched off half-way.
   area.status = 'downloading'; await store.put('areas', area);
   if (!state.areas.some((a) => a.id === area.id)) state.areas.push(area);
   act.log('data', `area download ${refresh ? 'update' : 'start/continue'}: ${area.name}`, { z: area.maxZoom });
-  openSheet(`Downloading “${area.name}”`, `<div class="progress" id="dProg"><div></div></div><p id="dTxt">Starting…</p><p class="note">You can keep driving and using the map. Already-stored tiles are skipped, so an interrupted download resumes where it stopped.${refresh ? ' Updating replaces tiles only when the new copy downloads successfully.' : ''}</p><div class="btns"><button class="btn danger" data-a="cancel">Stop</button></div>`, {
-    cancel: () => areaAbort.abort(),
-  });
-  const res = await tiles.downloadArea({
+  if (!quiet) areaProgressSheet(area);
+  areaPill(area, 0);
+  let res;
+  try { res = await tiles.downloadArea({
     bbox: area.bbox, layers: area.layers, maxZoom: area.maxZoom, demMaxZoom: area.demMaxZoom, signal: areaAbort.signal, force: refresh,
-    onProgress: (p, s) => { const bar = document.querySelector('#dProg > div'); if (bar) bar.style.width = `${p * 100}%`; const t = $('dTxt'); if (t) t.textContent = `${s.done.toLocaleString()} / ${s.total.toLocaleString()} tiles · ${gb(s.bytes)}${s.failed ? ` · ${s.failed} failed` : ''}`; },
-  });
+    onProgress: (p, s) => {
+      const txt = `${s.done.toLocaleString()} / ${s.total.toLocaleString()} tiles · ${gb(s.bytes)}${s.failed ? ` · ${s.failed} failed` : ''}`;
+      areaRunning.p = p; areaRunning.txt = txt; areaPill(area, p, s);
+      const bar = document.querySelector('#dProg > div'); if (bar) bar.style.width = `${p * 100}%`; const t = $('dTxt'); if (t) t.textContent = txt;
+      if (s.done % 500 === 0) { area.done = s.done; store.put('areas', area); }
+    },
+  }); } finally { areaRunning = null; areaPill(null); }
   area.tiles = res.total; area.bytes = Math.max(area.bytes || 0, res.bytes); area.failed = res.failed; area.updated = Date.now();
   area.status = res.cancelled || res.failed ? 'partial' : 'complete'; area.done = res.done;
   await store.put('areas', area);
   if (!state.areas.some((a) => a.id === area.id)) state.areas.push(area);
   toast(res.cancelled ? `Stopped — ${res.done.toLocaleString()} tiles kept; tap Continue to carry on` : `“${area.name}” ready offline${res.failed ? ` (${res.failed} tiles could not be fetched)` : ''}`, 6000);
-  mapsTab = 'imagery'; mapsSheet(); updateNoMapHint();
+  if (!quiet || $('sheet').hidden === false && $('sheetTitle').textContent.startsWith('Downloading')) { mapsTab = 'imagery'; mapsSheet(); }
+  updateNoMapHint();
+}
+// Carry on with unfinished area downloads by themselves (after a restart, the car being switched off,
+// or Android pausing Rimal in the background).
+function resumeAreaDownloads(reason) {
+  if (areaRunning || !tiles.isOnline()) return;
+  // Skip areas that made no progress last time (e.g. tiles the server simply doesn't have).
+  const a = state.areas.find((x) => (x.status === 'downloading' || (x.status === 'partial' && !x.userStopped)) && !(x.lastResumeDone != null && x.lastResumeDone === (x.done || 0)));
+  if (!a) return;
+  a.lastResumeDone = a.done || 0;
+  act.log('data', `auto-continue area download “${a.name}” (${reason})`);
+  toast(`Continuing the download of “${a.name}”…`, 4000);
+  runAreaDownload(a, false, true);
 }
 
 async function importMapFiles(files) {
@@ -1288,13 +1374,15 @@ async function importMapFiles(files) {
       }
       const res = await store.importMapFile(file, bar);
       const meta = await registerMap(res.name);
-      if (!res.persisted) failed.push(`${file.name}: not enough storage — loaded for this session only`);
+      if (!res.persisted) { failed.push(`${file.name}: could not be saved into the app (${res.error?.message || 'storage refused'}) — it works only until Rimal closes. Check free space in Android Settings → Storage.`); state.lastImportFail = `${file.name} could not be saved (${res.error?.message || 'storage refused'})`; }
       else done.push(`${file.name} (${meta.kind})`);
     } catch (e) {
       failed.push(`${file.name}: ${e.message}`);
       await store.deleteMapFile(file.name.replace(/[^\w.\-]+/g, '_')).catch(() => {});
     }
   }
+  act.log(failed.length ? 'error' : 'data', `map import: ${done.length} ok, ${failed.length} failed`, { done, failed });
+  if (!failed.length) state.lastImportFail = null;
   await loadMaps(); applyStyle(); updateNoMapHint();
   openSheet('Import finished', `${done.length ? `<p>✅ Installed:</p><ul>${done.map((d) => `<li>${esc(d)}</li>`).join('')}</ul>` : ''}${failed.length ? `<p class="warnbox">${failed.map(esc).join('<br>')}</p>` : ''}<p class="note">You can remove the USB stick now.</p><div class="btns"><button class="primary" data-a="ok">OK</button></div>`, { ok: () => { mapsTab = 'updates'; mapsSheet(); } });
 }
@@ -1324,7 +1412,7 @@ function toolsSheet() {
     report: reportSheet, flag: flagIssue, act: () => activitySheet(), check: checklistSheet, stars: starsSheet, flog: fuelLogSheet,
     plan: () => startPlan('route'), measure: () => startPlan('measure'), tilt: tiltSheet, wx: weatherSheet, fuel: fuelSheet, sun: sunSheet,
     sos: sosSheet, settings: settingsSheet, svc: serviceSheet, manual: openManual, appupd: appUpdateSheet,
-    backup: () => openSheet('Backup & restore', `<p class="note">Saves all trips, routes, waypoints and settings into one file (Documents/Rimal). Restore it on this or another unit via Trips → Import.</p><div class="btns"><button class="primary" data-a="b">💾 Create backup</button><button class="btn" data-a="r">Restore from file</button></div>`, { b: backup, r: () => pickFile('.json,application/json', importFiles, false) }),
+    backup: backupSheet,
   });
 }
 
@@ -1909,6 +1997,7 @@ async function boot() {
   $('bLib').onclick = tripsSheet;
   $('bMaps').onclick = () => mapsSheet();
   $('bTools').onclick = toolsSheet;
+  $('tilt').onclick = () => tiltSheet(); $('tilt').style.cursor = 'pointer'; $('tilt').title = 'Pitch & roll — tap to level or reset';
   $('bMore').onclick = moreSheet;
   $('noMapLater').onclick = () => { state.noMapDismissed = true; updateNoMapHint(); toast('Maps → Updates & files whenever you are ready'); };
   $('noMapBtn').onclick = () => { mapsTab = 'updates'; mapsSheet(); };
@@ -1954,7 +2043,9 @@ async function boot() {
   setInterval(() => { updateDash(); store.saveSetting('odometer', S.odometer); }, 5000);
   native.keepAwake();
   const unfinished = state.areas.filter((a) => a.status === 'downloading' || a.status === 'partial');
-  if (unfinished.length) setTimeout(() => toast(`“${unfinished[0].name}” didn’t finish downloading — Maps → Satellite & areas → Continue`, 7000), 4000);
+  if (unfinished.length) setTimeout(() => resumeAreaDownloads('app started'), 8000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(() => resumeAreaDownloads('back in Rimal'), 2000); });
+  window.addEventListener('online', () => setTimeout(() => resumeAreaDownloads('internet back'), 5000));
   setTimeout(() => { if (navigator.onLine !== false) checkAppUpdate(false).catch(() => {}); }, 20000);
   gps.start(S.demoGps);
   act.startHeartbeat(() => ({ snap: matcher.stats.fixes ? Math.round(matcher.stats.snapped / matcher.stats.fixes * 100) + '%' : null, bias: bias?.current()?.map(Math.round) || null, zoom: +map.getZoom().toFixed(1), follow: state.follow, rec: state.rec.active ? state.rec.points.length : 0, nav: !!state.nav, online: tiles.isOnline(), gps: $('gpsState').textContent, acc: state.fix ? Math.round(state.fix.acc) : null, fixAgeS: state.fix ? Math.round((Date.now() - state.fix.t) / 1000) : null }));

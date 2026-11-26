@@ -1,3 +1,4 @@
+import { native } from './native.js';
 // Offline map packs + automatic updates.
 // Packs are published as GitHub releases (see .github/workflows/build-packs.yml):
 //   tag  pack-<kind>-<YYYYMMDD>   asset  ksa-<kind>.pmtiles  (or ksa-poi.json)
@@ -71,6 +72,7 @@ export async function download(item, token, onProgress, signal) {
     const { uri } = await Filesystem.getUri({ path, directory: Directory.Cache });
     const h = await FileTransfer.addListener('progress', (p) => onProgress?.(0.9 * (p.bytes / (p.contentLength || item.size || 1)), p.bytes));
     try {
+      await native.ensureDownloadPermission();
       await FileTransfer.downloadFile({ url: item.url, path: uri, progress: true, headers: headers(token, true), connectTimeout: 30000, readTimeout: 120000 });
     } finally { await h.remove(); }
     const res = await fetch(Capacitor.convertFileSrc(uri));

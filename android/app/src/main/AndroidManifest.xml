@@ -38,6 +38,9 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Android 10 and older: the download plugin insists on these even for the app's own cache folder. -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
     <queries>
         <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>
         <intent><action android:name="android.intent.action.VIEW" /><data android:mimeType="application/pdf" /></intent>

@@ -323,3 +323,15 @@ export async function elevationAt(lon, lat, z = 12) {
 }
 
 export function openPack(file) { return new PMTiles(file); }
+
+
+/** Tiles stored for an area (for exporting it as a map file). layer: 'sat' | 'dem'. */
+export function areaTileList(area, layer) {
+  const top = layer === 'sat' ? area.maxZoom : (area.demMaxZoom || 12);
+  return [...tilesIn(area.bbox, 0, top)];
+}
+export async function readStoredTile(layer, source, z, x, y) {
+  const key = `${layer === 'sat' ? `sat:${source || cfg.satSource}` : 'dem'}/${z}/${x}/${y}`;
+  const c = await cacheGet(key);
+  return c ? new Uint8Array(c instanceof ArrayBuffer ? c : c.buffer || c) : null;
+}

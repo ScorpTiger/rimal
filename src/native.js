@@ -54,8 +54,27 @@ export const native = {
     try { return await RimalNative.appInfo(); } catch { return null; }
   },
 
+  /** Write a large binary file to Documents/Rimal in pieces. Returns { write(u8), close() → where }. */
+  async binaryWriter(filename) {
+    if (!isNative) { const parts = []; return { write: async (u8) => { parts.push(u8); }, close: async () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(parts)); a.download = filename; a.click(); return 'downloaded'; } }; }
+    await this.ensureDownloadPermission();
+    const path = `Rimal/${filename}`; let first = true;
+    const b64 = (u8) => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
+    return {
+      write: async (u8) => { if (first) { await Filesystem.writeFile({ path, data: b64(u8), directory: Directory.Documents, recursive: true }); first = false; } else await Filesystem.appendFile({ path, data: b64(u8), directory: Directory.Documents }); },
+      close: async () => `Documents/Rimal/${filename}`,
+    };
+  },
+
+  /** Android 10 and older need storage permission before the download plugin will run. */
+  async ensureDownloadPermission() {
+    if (!isNative || Capacitor.getPlatform() !== 'android') return true;
+    try { const p = await Filesystem.checkPermissions(); if (p.publicStorage === 'granted') return true; const r = await Filesystem.requestPermissions(); return r.publicStorage === 'granted'; } catch { return true; }
+  },
+
   /** Download a file into app cache with progress; returns the native file path. */
   async download(url, name, onProgress) {
+    await this.ensureDownloadPermission();
     const { uri } = await Filesystem.getUri({ path: name, directory: Directory.Cache });
     try { await Filesystem.deleteFile({ path: name, directory: Directory.Cache }); } catch { /* none */ }
     const h = await FileTransfer.addListener('progress', (p) => onProgress?.(p.bytes / (p.contentLength || 1), p.bytes));

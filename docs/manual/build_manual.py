@@ -176,7 +176,8 @@ st += [P('3. Offline maps', h1),
               '<b>Maps → Satellite &amp; areas → Download this area for offline</b>.',
               'Choose the detail (max zoom). Rimal shows the number of tiles and the size before you start; stay under about 120,000 tiles per area.',
               'Downloaded areas are listed below the button — <b>View</b> to jump there, <b>Update</b> to refresh, or delete.',
-              'If the car is switched off or the connection drops part-way, the area is kept and marked <b>not finished</b>. Tap <b>▶ Continue</b>: tiles already downloaded are skipped and it carries on with the same area — no need to select it again.']) + [
+              'Tap <b>Use the map</b> to close the download window: the download carries on and its progress shows on the left (tap it to open the window again).',
+              'If the car is switched off, Rimal is closed or the internet drops part-way, the download <b>continues by itself</b> the next time Rimal is open with internet — already-downloaded tiles are skipped. You can also tap <b>▶ Continue</b> in the list. Only <b>Stop download</b> stops it for good.']) + [
        img(IMG('car-area-continue.jpg'), 11, 'An interrupted area with the Continue button.'),
        P('The default imagery (Sentinel-2) stops at zoom 14 (10 m per pixel). For zoom 15–18, first choose <b>Esri World Imagery</b> under <b>Satellite imagery source</b>. Esri imagery is for personal use; do not share downloaded copies.', small),
        P('3.5 High-detail imagery around home (MacBook tool)', h2),
@@ -323,7 +324,7 @@ st += [P('8. Safety tools', h1),
        P('Fuel range', h2),
        P('Enter your range on a full tank; tap <b>I just filled up</b> after refuelling. Rimal counts down the range, finds the nearest stations, and draws two rings: <b>orange</b> = turn-back radius (half the range), <b>red</b> = full range (as the crow flies). Use the fuel log (section 9) to measure your real range.'),
        P('Pitch and roll', h2),
-       P('Live gauges of the vehicle’s nose up/down and side tilt with warning limits. Rimal levels itself at start-up; for best accuracy park on level ground and press <b>Calibrate</b>. Many car screens have no motion sensor — then the gauges stay hidden.'),
+       P('Live gauges of the vehicle’s nose up/down and side tilt with warning limits. Rimal levels itself at start-up; for best accuracy park on level ground and press <b>Level now</b>. <b>Reset calibration</b> clears it so Rimal levels itself again. Tap the gauges on the map to open this screen. Many car screens have no motion sensor — then the gauges stay hidden.'),
        P('Sun and time', h2),
        P('First light, sunrise, sunset, last light, daylight left and tomorrow’s sunrise for where you are.'),
        PageBreak()]
@@ -370,7 +371,10 @@ st += [P('10. Importing, exporting and backups', h1),
        'Any trip: <b>Export GPX</b>. All trips at once: <b>Trips → Export all (GPX)</b>.',
        'Files are saved to <b>Documents/Rimal</b> on the device (or offered through the share menu).']) + [
        P('Backup and restore', h2),
-       P('<b>Settings &amp; tools → Backup</b> saves all trips, routes, waypoints and settings in one file in Documents/Rimal. To restore on this or another device: <b>Restore from file</b> (or Trips → Import). Restoring merges — nothing on the device is deleted. Do this before uninstalling or changing car screens. Maps are not part of the backup; keep your USB map files.'),
+       P('<b>Settings &amp; tools → Backup</b>:'),
+       ] + B(['<b>Save data backup</b>: one small file with all trips, routes, waypoints, settings, the <b>fuel log</b>, the <b>service checklist</b> and the trip checklist, saved in Documents/Rimal. <b>Restore from file</b> brings it back on this or another device; restoring merges, nothing is deleted.',
+              '<b>Downloaded areas → Save as map file</b>: saves a zoom 15–18 area as a .pmtiles map file in Documents/Rimal. It survives an uninstall and can be copied to a USB stick and imported on the car screen (Maps → Updates &amp; files → Import) — download on the phone over good Wi-Fi, then move it to the car.',
+              'The big Saudi map packs are not copied again — keep them on your USB stick.']) + [
        P('Sharing with friends', h2),
        P('Friends install the same APK and map files — nothing needs to be made separately. Each device has its own trips and settings; share trips as GPX files. Ask them to choose the <b>Arrow</b> position icon in Settings (the default icon is your own Land Cruiser).'),
        PageBreak()]
