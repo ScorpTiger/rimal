@@ -1,0 +1,443 @@
+2026-11-26 10:37:30.478 App[10190:34071] DiskCookieStorage changing policy from 2 to 0, cookie file: file:///Users/runner/Library/Developer/CoreSimulator/Devices/F22FC8BB-6166-471A-868A-40317F40C6B7/data/Containers/Data/Application/8C980EB8-B7D8-4200-9683-A91761A40102/Library/Cookies/com.rimal.offroad.binarycookies
+⚡️  Loading app at capacitor://localhost...
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 20017744
+⚡️  To Native ->  Geolocation checkPermissions 20017745
+⚡️  TO JS undefined
+⚡️  TO JS {"coarseLocation":"granted","location":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 20017746
+⚡️  TO JS {"coords":{"altitude":0,"trueHeading":null,"accuracy":5,"magneticHeading":null,"longitude":46.859999999999999,"speed":-1,"latitude":24.579999999999998,"headingAccuracy":null,"altitudeAccuracy":-1,"course":null,"heading":null},"timestamp":1795689464544.7231
+⚡️  To Native ->  CapacitorHttp get 20017747
+2026-11-26 10:37:45.780 App[10190:34144] [NSURLSession sharedSession] may not be invalidated
+⚡️  TO JS {"status":200,"data":"iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAIAAADTED8xAACDTElEQVR4nI39v68tz7LtBUZkzbW\/57zzgAvS6zbBwcACCRMJ0epWGw+Eg\/BQS+23MJBAQmoLLFxMbARI8EfgYNEu7WEgtVrCAL2nd+8957v3qsw2audYnxiRc98uLS3NWTN\/RIyIGBGZVbNm\/if\/p4iMyIiIWBErYkRcERmx4ut4Tj5tZsTav
+⚡️  [warn] - Loading settings took over 8s — continuing without it
+⚡️  [warn] - Loading trips took over 8s — continuing without it
+⚡️  [warn] - Opening offline maps took over 12s — continuing without it
+⚡️  [warn] - There is no style added to the map.
+⚡️  [log] - RIMAL_STATUS {"platform":"ios","engine":true,"webgl2":true,"opfs":true,"fix":[46.86,24.58,5],"maps":0,"zoom":15,"sensor":false}
+⚡️  [log] - RIMAL_LAYOUT {"vw":834,"vh":1210,"dpr":2,"portrait":true,"narrow":true,"rects":[["dash",0,24,834,66,"flex","visible","2"],["tools",0,1121,834,64,"flex","visible","2"],["map",0,90,834,1031,"block","visible","0"],["mapBtns",780,901,46,208,"flex","visible","3"]],"dashW":"0px"}
+⚡️  To Native ->  CapacitorHttp get 20017748
+⚡️  To Native ->  Filesystem mkdir 20017749
+⚡️  TO JS undefined
+2026-11-26 10:39:02.856 App[10190:34107] [NSURLSession sharedSession] may not be invalidated
+ERROR MESSAGE:  {"message":"The request timed out.","errorMessage":"The request timed out.","code":"NSURLErrorDomain"}
+⚡️  To Native ->  Filesystem deleteFile 20017750
+⚡️  [error] - {"message":"The request timed out.","errorMessage":"The request timed out.","code":"NSURLErrorDomain"}
+ERROR MESSAGE:  {"message":"'deleteFile' failed because file at 'file:\/\/\/Users\/runner\/Library\/Developer\/CoreSimulator\/Devices\/F22FC8BB-6166-471A-868A-40317F40C6B7\/data\/Containers\/Data\/Application\/8C980EB8-B7D8-4200-9683-A91761A40102\/Library\/Caches\/dl\/ksa-satellite-sw-20261124.pmtiles'  does not exist.","errorMessage":"'deleteFile' failed because file at 'file:\/\/\/Users\/runner\/Library\/Developer\/CoreSimulator\/Devices\/F22FC8BB-6166-471A-868A-40317F40C6B7\/data\/Containers\/Data\/Application\/8C980EB8
+⚡️  To Native ->  Filesystem getUri 20017751
+⚡️  [error] - {"message":"'deleteFile' failed because file at 'file:///Users/runner/Library/Developer/CoreSimulator/Devices/F22FC8BB-6166-471A-868A-40317F40C6B7/data/Containers/Data/Application/8C980EB8-B7D8-4200-9683-A91761A40102/Library/Caches/dl/ksa-satellite-sw-20261124.pmtiles'  does not exist.","errorMessage":"'deleteFile' failed because file at 'file:///Users/runner/Library/Developer/CoreSimulator/Devices/F22FC8BB-6166-471A-868A-40317F40C6B7/data/Containers/Data/Application/8C980EB8-B7D8-4200-9683-A91761A40102/Library/Caches/dl/ksa-satellite-sw-20261124.pmtiles'  does not exist.","code":"OS-PLUG-FILE-0008"}
+⚡️  TO JS {"uri":"file:\/\/\/Users\/runner\/Library\/Developer\/CoreSimulator\/Devices\/F22FC8BB-6166-471A-868A-40317F40C6B7\/data\/Containers\/Data\/Application\/8C980EB8-B7D8-4200-9683-A91761A40102\/Library\/Caches\/dl\/ksa-satellite-sw-20261124.pmtiles"}
+⚡️  To Native ->  FileTransfer addListener 20017752
+⚡️  To Native ->  FileTransfer downloadFile 20017753
+⚡️  [log] - RIMAL_STATUS {"platform":"ios","engine":true,"webgl2":true,"opfs":true,"fix":[46.86,24.58,5],"maps":0,"styleLoaded":false,"zoom":15,"sensor":false}
+⚡️  To Native ->  CapacitorHttp get 20017754
+⚡️  TO JS {"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","lengthComputable":true,"contentLength":640133384,"bytes":16384}
+⚡️  TO JS {"bytes":6255905,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"lengthComputable":true}
+⚡️  TO JS {"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","bytes":18838817,"type":"download","lengthComputable":true,"contentLength":640133384}
+⚡️  TO JS {"bytes":28442399,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"lengthComputable":true}
+⚡️  TO JS {"contentLength":640133384,"lengthComputable":true,"type":"download","bytes":35616033,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles"}
+⚡️  TO JS {"contentLength":640133384,"lengthComputable":true,"type":"download","bytes":46198900,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles"}
+⚡️  TO JS {"bytes":58274411,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"lengthComputable":true}
+⚡️  TO JS {"bytes":62468715,"contentLength":640133384,"lengthComputable":true,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","type":"download"}
+⚡️  TO JS {"bytes":77594624,"contentLength":640133384,"lengthComputable":true,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","type":"download"}
+⚡️  TO JS {"contentLength":640133384,"lengthComputable":true,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","bytes":81788928}
+⚡️  TO JS {"bytes":90177536,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"lengthComputable":true}
+⚡️  TO JS {"bytes":99123064,"contentLength":640133384,"lengthComputable":true,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","type":"download"}
+⚡️  TO JS {"bytes":114160881,"contentLength":640133384,"lengthComputable":true,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","type":"download"}
+⚡️  TO JS {"bytes":121714322,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"lengthComputable":true}
+⚡️  TO JS {"contentLength":640133384,"lengthComputable":true,"type":"download","bytes":125908626,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles"}
+⚡️  TO JS {"bytes":134297234,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"lengthComputable":true}
+⚡️  TO JS {"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"type":"download","lengthComputable":true,"bytes":138491538}
+⚡️  TO JS {"contentLength":640133384,"lengthComputable":true,"type":"download","bytes":147666072,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles"}
+⚡️  TO JS {"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"type":"download","lengthComputable":true,"bytes":151860376}
+⚡️  TO JS {"bytes":156054680,"contentLength":640133384,"lengthComputable":true,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles"}
+⚡️  TO JS {"bytes":164443288,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"lengthComputable":true}
+⚡️  TO JS {"bytes":177026200,"contentLength":640133384,"lengthComputable":true,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","type":"download"}
+⚡️  TO JS {"bytes":185414808,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","lengthComputable":true,"contentLength":640133384,"type":"download"}
+⚡️  TO JS {"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"type":"download","lengthComputable":true,"bytes":194673889}
+⚡️  TO JS {"bytes":205635030,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"lengthComputable":true}
+⚡️  TO JS {"contentLength":640133384,"lengthComputable":true,"type":"download","bytes":215645409,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles"}
+⚡️  TO JS {"bytes":219839713,"contentLength":640133384,"lengthComputable":true,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","type":"download"}
+⚡️  TO JS {"bytes":222298112,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"lengthComputable":true}
+⚡️  TO JS {"bytes":230686720,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"lengthComputable":true}
+⚡️  TO JS {"bytes":240612736,"contentLength":640133384,"lengthComputable":true,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","type":"download"}
+⚡️  TO JS {"bytes":257389952,"contentLength":640133384,"lengthComputable":true,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","type":"download"}
+⚡️  TO JS {"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"type":"download","lengthComputable":true,"bytes":268579885}
+⚡️  TO JS {"bytes":283210283,"contentLength":640133384,"lengthComputable":true,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles"}
+⚡️  TO JS {"type":"download","contentLength":640133384,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","bytes":300495403,"lengthComputable":true}
+⚡️  TO JS {"bytes":304689707,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"lengthComputable":true}
+⚡️  TO JS {"bytes":309803634,"contentLength":640133384,"lengthComputable":true,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles"}
+⚡️  TO JS {"bytes":313981572,"contentLength":640133384,"lengthComputable":true,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","type":"download"}
+⚡️  TO JS {"contentLength":640133384,"type":"download","lengthComputable":true,"bytes":321519086,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles"}
+⚡️  TO JS {"bytes":329907694,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"lengthComputable":true}
+⚡️  TO JS {"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"type":"download","lengthComputable":true,"bytes":334905134}
+⚡️  TO JS {"bytes":343293742,"contentLength":640133384,"lengthComputable":true,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","type":"download"}
+⚡️  TO JS {"bytes":355876654,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"lengthComputable":true}
+⚡️  TO JS {"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"type":"download","lengthComputable":true,"bytes":367099763}
+⚡️  TO JS {"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"type":"download","lengthComputable":true,"bytes":373518539}
+⚡️  TO JS {"bytes":377712843,"contentLength":640133384,"lengthComputable":true,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","type":"download"}
+⚡️  TO JS {"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"type":"download","lengthComputable":true,"bytes":377977371}
+⚡️  TO JS {"lengthComputable":true,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","bytes":392904238,"contentLength":640133384}
+⚡️  TO JS {"bytes":403847117,"contentLength":640133384,"lengthComputable":true,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","type":"download"}
+⚡️  TO JS {"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"type":"download","lengthComputable":true,"bytes":416788587}
+⚡️  TO JS {"bytes":430734016,"contentLength":640133384,"lengthComputable":true,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","type":"download"}
+⚡️  TO JS {"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"lengthComputable":true,"type":"download","bytes":443151180}
+⚡️  TO JS {"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"type":"download","lengthComputable":true,"bytes":453309260}
+⚡️  TO JS {"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"lengthComputable":true,"type":"download","bytes":461697868}
+⚡️  TO JS {"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"type":"download","lengthComputable":true,"bytes":470086476}
+⚡️  TO JS {"lengthComputable":true,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","bytes":478475084,"contentLength":640133384}
+⚡️  TO JS {"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"type":"download","lengthComputable":true,"bytes":482669388}
+⚡️  TO JS {"lengthComputable":true,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","bytes":492945093,"contentLength":640133384}
+⚡️  TO JS {"lengthComputable":true,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","bytes":501333701,"contentLength":640133384}
+⚡️  TO JS {"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"lengthComputable":true,"type":"download","bytes":509179984}
+⚡️  TO JS {"lengthComputable":true,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","bytes":519829584,"contentLength":640133384}
+⚡️  TO JS {"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"lengthComputable":true,"type":"download","bytes":532919686}
+⚡️  TO JS {"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"type":"download","lengthComputable":true,"bytes":550369908}
+⚡️  TO JS {"lengthComputable":true,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","bytes":562952820,"contentLength":640133384}
+⚡️  TO JS {"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"type":"download","lengthComputable":true,"bytes":573420207}
+⚡️  TO JS {"lengthComputable":true,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","bytes":583942144,"contentLength":640133384}
+⚡️  TO JS {"bytes":601862511,"contentLength":640133384,"lengthComputable":true,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","type":"download"}
+⚡️  TO JS {"lengthComputable":true,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","bytes":610251119,"contentLength":640133384}
+⚡️  TO JS {"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"type":"download","lengthComputable":true,"bytes":614445423}
+⚡️  TO JS {"bytes":619262675,"contentLength":640133384,"lengthComputable":true,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","type":"download"}
+⚡️  TO JS {"bytes":624803827,"contentLength":640133384,"lengthComputable":true,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","type":"download"}
+⚡️  TO JS {"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"type":"download","lengthComputable":true,"bytes":626016243}
+⚡️  TO JS {"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","bytes":639283528,"lengthComputable":true,"type":"download","contentLength":640133384}
+⚡️  TO JS {"contentLength":640133384,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","lengthComputable":true,"bytes":640133384}
+⚡️  TO JS {"path":"\/Users\/runner\/Library\/Developer\/CoreSimulator\/Devices\/F22FC8BB-6166-471A-868A-40317F40C6B7\/data\/Containers\/Data\/Application\/8C980EB8-B7D8-4200-9683-A91761A40102\/Library\/Caches\/dl\/ksa-satellite-sw-20261124.pmtiles"}
+⚡️  To Native ->  FileTransfer removeListener -1
+2026-11-26 10:40:03.041 App[10190:39709] [NSURLSession sharedSession] may not be invalidated
+ERROR MESSAGE:  {"code":"NSURLErrorDomain","errorMessage":"The request timed out.","message":"The request timed out."}
+⚡️  To Native ->  CapacitorHttp get 20017755
+⚡️  To Native ->  CapacitorHttp get 20017756
+⚡️  To Native ->  CapacitorHttp get 20017757
+⚡️  To Native ->  CapacitorHttp get 20017758
+2026-11-26 10:40:28.018 App[10190:44352] [NSURLSession sharedSession] may not be invalidated
+⚡️  TO JS {"status":200,"data":"\/9j\/4AAQSkZJRgABAQAAAQABAAD\/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL\/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL\/wAARCAEAAQADASIAA
+2026-11-26 10:40:28.023 App[10190:44352] [NSURLSession sharedSession] may not be invalidated
+⚡️  TO JS {"status":200,"data":"\/9j\/4AAQSkZJRgABAQAAAQABAAD\/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL\/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL\/wAARCAEAAQADASIAA
+2026-11-26 10:40:28.026 App[10190:44352] [NSURLSession sharedSession] may not be invalidated
+⚡️  TO JS {"headers":{"content-length":"18266","access-control-allow-credentials":"true","date":"Thu, 26 Nov 2026 10:40:28 GMT","expires":"Thu, 03 Dec 2026 10:40:28 GMT","cache-control":"max-age=604800","server":"Apache\/2.4.59 (Debian)","content-type":"image\/jpeg"
+2026-11-26 10:40:28.028 App[10190:44352] [NSURLSession sharedSession] may not be invalidated
+⚡️  TO JS {"headers":{"content-length":"19503","access-control-allow-credentials":"true","date":"Thu, 26 Nov 2026 10:40:28 GMT","expires":"Thu, 03 Dec 2026 10:40:28 GMT","cache-control":"max-age=604800","server":"Apache\/2.4.59 (Debian)","content-type":"image\/jpeg"
+⚡️  [error] - {"code":"NSURLErrorDomain","errorMessage":"The request timed out.","message":"The request timed out."}
+⚡️  [warn] - Weather fetch failed The request timed out.
+⚡️  WebView process terminated
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 33319409
+⚡️  To Native ->  Geolocation checkPermissions 33319410
+⚡️  TO JS undefined
+⚡️  TO JS {"location":"granted","coarseLocation":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 33319411
+⚡️  WebView process terminated
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 77799367
+⚡️  To Native ->  Geolocation checkPermissions 77799368
+⚡️  TO JS undefined
+⚡️  TO JS {"coarseLocation":"granted","location":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 77799369
+⚡️  WebView process terminated
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 56200974
+⚡️  To Native ->  Geolocation checkPermissions 56200975
+⚡️  TO JS undefined
+⚡️  TO JS {"coarseLocation":"granted","location":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 56200976
+⚡️  WebView process terminated
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 99617357
+⚡️  TO JS undefined
+⚡️  To Native ->  Geolocation checkPermissions 99617358
+⚡️  TO JS {"location":"granted","coarseLocation":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 99617359
+⚡️  WebView process terminated
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 73611320
+⚡️  To Native ->  Geolocation checkPermissions 73611321
+⚡️  TO JS undefined
+⚡️  TO JS {"location":"granted","coarseLocation":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 73611322
+⚡️  WebView process terminated
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 113331523
+⚡️  TO JS undefined
+⚡️  To Native ->  Geolocation checkPermissions 113331524
+⚡️  TO JS {"coarseLocation":"granted","location":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 113331525
+⚡️  WebView process terminated
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 27375366
+⚡️  To Native ->  Geolocation checkPermissions 27375367
+⚡️  TO JS undefined
+⚡️  TO JS {"coarseLocation":"granted","location":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 27375368
+⚡️  WebView process terminated
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 15595854
+⚡️  To Native ->  Geolocation checkPermissions 15595855
+⚡️  TO JS undefined
+⚡️  TO JS {"coarseLocation":"granted","location":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 15595856
+⚡️  WebView process terminated
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 16903466
+⚡️  To Native ->  Geolocation checkPermissions 16903467
+⚡️  TO JS undefined
+⚡️  TO JS {"coarseLocation":"granted","location":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 16903468
+⚡️  WebView process terminated
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 125662222
+⚡️  To Native ->  Geolocation checkPermissions 125662223
+⚡️  TO JS undefined
+⚡️  TO JS {"coarseLocation":"granted","location":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 125662224
+⚡️  WebView process terminated
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 25881588
+⚡️  To Native ->  Geolocation checkPermissions 25881589
+⚡️  TO JS undefined
+⚡️  TO JS {"coarseLocation":"granted","location":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 25881590
+⚡️  WebView process terminated
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 127696915
+⚡️  To Native ->  Geolocation checkPermissions 127696916
+⚡️  TO JS undefined
+⚡️  TO JS {"location":"granted","coarseLocation":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 127696917
+⚡️  WebView process terminated
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 93123126
+⚡️  TO JS undefined
+⚡️  To Native ->  Geolocation checkPermissions 93123127
+⚡️  TO JS {"coarseLocation":"granted","location":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 93123128
+⚡️  WebView process terminated
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 59956849
+⚡️  TO JS undefined
+⚡️  To Native ->  Geolocation checkPermissions 59956850
+⚡️  TO JS {"coarseLocation":"granted","location":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 59956851
+⚡️  WebView process terminated
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 42100126
+⚡️  TO JS undefined
+⚡️  To Native ->  Geolocation checkPermissions 42100127
+⚡️  TO JS {"location":"granted","coarseLocation":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 42100128
+⚡️  [warn] - Loading settings took over 8s — continuing without it
+⚡️  [warn] - Loading trips took over 8s — continuing without it
+⚡️  WebView process terminated
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 123606856
+⚡️  To Native ->  Geolocation checkPermissions 123606857
+⚡️  TO JS undefined
+⚡️  TO JS {"coarseLocation":"granted","location":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 123606858
+⚡️  [warn] - Loading settings took over 8s — continuing without it
+⚡️  [warn] - Loading trips took over 8s — continuing without it
+⚡️  To Native ->  Filesystem mkdir 123606859
+ERROR MESSAGE:  {"message":"Directory at 'file:\/\/\/Users\/runner\/Library\/Developer\/CoreSimulator\/Devices\/F22FC8BB-6166-471A-868A-40317F40C6B7\/data\/Containers\/Data\/Application\/8C980EB8-B7D8-4200-9683-A91761A40102\/Library\/Caches\/dl\/'  already exists, cannot be overwritten.","errorMessage":"Directory at 'file:\/\/\/Users\/runner\/Library\/Developer\/CoreSimulator\/Devices\/F22FC8BB-6166-471A-868A-40317F40C6B7\/data\/Containers\/Data\/Application\/8C980EB8-B7D8-4200-9683-A91761A40102\/Library\/Caches\/dl\/'  al
+⚡️  [error] - {"message":"Directory at 'file:///Users/runner/Library/Developer/CoreSimulator/Devices/F22FC8BB-6166-471A-868A-40317F40C6B7/data/Containers/Data/Application/8C980EB8-B7D8-4200-9683-A91761A40102/Library/Caches/dl/'  already exists, cannot be overwritten.","errorMessage":"Directory at 'file:///Users/runner/Library/Developer/CoreSimulator/Devices/F22FC8BB-6166-471A-868A-40317F40C6B7/data/Containers/Data/Application/8C980EB8-B7D8-4200-9683-A91761A40102/Library/Caches/dl/'  already exists, cannot be overwritten.","code":"OS-PLUG-FILE-0010"}
+⚡️  To Native ->  Filesystem deleteFile 123606860
+⚡️  TO JS undefined
+⚡️  To Native ->  Filesystem getUri 123606861
+⚡️  TO JS {"uri":"file:\/\/\/Users\/runner\/Library\/Developer\/CoreSimulator\/Devices\/F22FC8BB-6166-471A-868A-40317F40C6B7\/data\/Containers\/Data\/Application\/8C980EB8-B7D8-4200-9683-A91761A40102\/Library\/Caches\/dl\/ksa-satellite-sw-20261124.pmtiles"}
+⚡️  To Native ->  FileTransfer addListener 123606862
+⚡️  To Native ->  FileTransfer downloadFile 123606863
+⚡️  WebView process terminated
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 112078542
+⚡️  To Native ->  Geolocation checkPermissions 112078543
+⚡️  TO JS undefined
+⚡️  TO JS {"coarseLocation":"granted","location":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 112078544
+⚡️  TO JS {"path":"\/Users\/runner\/Library\/Developer\/CoreSimulator\/Devices\/F22FC8BB-6166-471A-868A-40317F40C6B7\/data\/Containers\/Data\/Application\/8C980EB8-B7D8-4200-9683-A91761A40102\/Library\/Caches\/dl\/ksa-satellite-sw-20261124.pmtiles"}
+⚡️  [warn] - Loading settings took over 8s — continuing without it
+⚡️  [warn] - Loading trips took over 8s — continuing without it
+⚡️  To Native ->  Filesystem mkdir 112078545
+ERROR MESSAGE:  {"message":"Directory at 'file:\/\/\/Users\/runner\/Library\/Developer\/CoreSimulator\/Devices\/F22FC8BB-6166-471A-868A-40317F40C6B7\/data\/Containers\/Data\/Application\/8C980EB8-B7D8-4200-9683-A91761A40102\/Library\/Caches\/dl\/'  already exists, cannot be overwritten.","code":"OS-PLUG-FILE-0010","errorMessage":"Directory at 'file:\/\/\/Users\/runner\/Library\/Developer\/CoreSimulator\/Devices\/F22FC8BB-6166-471A-868A-40317F40C6B7\/data\/Containers\/Data\/Application\/8C980EB8-B7D8-4200-9683-A91761A40102\
+⚡️  [error] - {"message":"Directory at 'file:///Users/runner/Library/Developer/CoreSimulator/Devices/F22FC8BB-6166-471A-868A-40317F40C6B7/data/Containers/Data/Application/8C980EB8-B7D8-4200-9683-A91761A40102/Library/Caches/dl/'  already exists, cannot be overwritten.","code":"OS-PLUG-FILE-0010","errorMessage":"Directory at 'file:///Users/runner/Library/Developer/CoreSimulator/Devices/F22FC8BB-6166-471A-868A-40317F40C6B7/data/Containers/Data/Application/8C980EB8-B7D8-4200-9683-A91761A40102/Library/Caches/dl/'  already exists, cannot be overwritten."}
+⚡️  To Native ->  Filesystem deleteFile 112078546
+⚡️  TO JS undefined
+⚡️  To Native ->  Filesystem getUri 112078547
+⚡️  TO JS {"uri":"file:\/\/\/Users\/runner\/Library\/Developer\/CoreSimulator\/Devices\/F22FC8BB-6166-471A-868A-40317F40C6B7\/data\/Containers\/Data\/Application\/8C980EB8-B7D8-4200-9683-A91761A40102\/Library\/Caches\/dl\/ksa-satellite-sw-20261124.pmtiles"}
+⚡️  To Native ->  FileTransfer addListener 112078548
+⚡️  To Native ->  FileTransfer downloadFile 112078549
+⚡️  TO JS {"lengthComputable":true,"bytes":16375,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384}
+⚡️  TO JS {"bytes":14605157,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","lengthComputable":true,"contentLength":640133384,"type":"download"}
+⚡️  TO JS {"type":"download","bytes":28376119,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","lengthComputable":true,"contentLength":640133384}
+⚡️  TO JS {"bytes":43373285,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","lengthComputable":true,"contentLength":640133384,"type":"download"}
+⚡️  TO JS {"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"lengthComputable":true,"bytes":52428800}
+⚡️  TO JS {"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"lengthComputable":true,"bytes":67108864}
+⚡️  TO JS {"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"type":"download","bytes":73400320,"lengthComputable":true}
+⚡️  TO JS {"bytes":81538341,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","lengthComputable":true,"contentLength":640133384,"type":"download"}
+⚡️  TO JS {"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"lengthComputable":true,"bytes":99951040}
+⚡️  TO JS {"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"lengthComputable":true,"bytes":119537664}
+⚡️  TO JS {"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"lengthComputable":true,"bytes":134868672}
+⚡️  TO JS {"lengthComputable":true,"bytes":144321829,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384}
+⚡️  TO JS {"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"lengthComputable":true,"bytes":155011008}
+⚡️  TO JS {"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"lengthComputable":true,"bytes":170499127}
+⚡️  TO JS {"type":"download","bytes":186646528,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","lengthComputable":true,"contentLength":640133384}
+⚡️  TO JS {"bytes":201796343,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","lengthComputable":true,"contentLength":640133384,"type":"download"}
+⚡️  TO JS {"type":"download","bytes":209715200,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","lengthComputable":true,"contentLength":640133384}
+⚡️  TO JS {"bytes":213909504,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","lengthComputable":true,"contentLength":640133384,"type":"download"}
+⚡️  TO JS {"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"lengthComputable":true,"bytes":230686720}
+⚡️  TO JS {"type":"download","bytes":247101486,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","lengthComputable":true,"contentLength":640133384}
+⚡️  TO JS {"bytes":260986368,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","lengthComputable":true,"contentLength":640133384,"type":"download"}
+⚡️  TO JS {"lengthComputable":true,"bytes":272941029,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384}
+⚡️  TO JS {"lengthComputable":true,"bytes":283896796,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384}
+⚡️  TO JS {"bytes":296155621,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","lengthComputable":true,"contentLength":640133384,"type":"download"}
+⚡️  TO JS {"lengthComputable":true,"bytes":308281344,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384}
+⚡️  TO JS {"type":"download","bytes":325445440,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","lengthComputable":true,"contentLength":640133384}
+⚡️  TO JS {"lengthComputable":true,"bytes":337003648,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384}
+⚡️  TO JS {"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"lengthComputable":true,"bytes":355448256}
+⚡️  TO JS {"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","bytes":369160238,"lengthComputable":true,"contentLength":640133384,"type":"download"}
+⚡️  TO JS {"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"lengthComputable":true,"bytes":381653376}
+⚡️  TO JS {"type":"download","bytes":394162944,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","lengthComputable":true,"contentLength":640133384}
+⚡️  TO JS {"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384,"lengthComputable":true,"bytes":408944640}
+⚡️  TO JS {"lengthComputable":true,"bytes":420063013,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384}
+⚡️  TO JS {"type":"download","contentLength":640133384,"lengthComputable":true,"bytes":433691968,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles"}
+⚡️  TO JS {"type":"download","bytes":447178935,"contentLength":640133384,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","lengthComputable":true}
+⚡️  TO JS {"lengthComputable":true,"bytes":465567744,"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","contentLength":640133384}
+⚡️  TO JS {"bytes":477662711,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","lengthComputable":true,"contentLength":640133384,"type":"download"}
+⚡️  TO JS {"type":"download","lengthComputable":true,"contentLength":640133384,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","bytes":500173541}
+⚡️  TO JS {"lengthComputable":true,"bytes":515899392,"contentLength":640133384,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","type":"download"}
+⚡️  TO JS {"bytes":528482304,"contentLength":640133384,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","lengthComputable":true,"type":"download"}
+⚡️  [warn] - Opening offline maps took over 12s — continuing without it
+⚡️  TO JS {"bytes":538968064,"contentLength":640133384,"url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","lengthComputable":true,"type":"download"}
+⚡️  TO JS {"type":"download","url":"https:\/\/github.com\/ScorpTiger\/rimal\/releases\/download\/pack-satellite-sw-20261124\/ksa-satellite-sw.pmtiles","lengthComputable":true,"contentLength":640133384,"bytes":543162368}
+⚡️  WebView process terminated
+⚡️  TO JS {"path":"\/Users\/runner\/Library\/Developer\/CoreSimulator\/Devices\/F22FC8BB-6166-471A-868A-40317F40C6B7\/data\/Containers\/Data\/Application\/8C980EB8-B7D8-4200-9683-A91761A40102\/Library\/Caches\/dl\/ksa-satellite-sw-20261124.pmtiles"}
+Error Domain=WKErrorDomain Code=4 "A JavaScript exception occurred" UserInfo={WKJavaScriptExceptionLineNumber=0, WKJavaScriptExceptionMessage=TypeError: undefined is not an object, WKJavaScriptExceptionColumnNumber=0, NSLocalizedDescription=A JavaScript exception occurred}
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 86275565
+⚡️  To Native ->  Geolocation checkPermissions 86275566
+⚡️  TO JS undefined
+⚡️  TO JS {"coarseLocation":"granted","location":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 86275567
+⚡️  WebView process terminated
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 65922648
+⚡️  To Native ->  Geolocation checkPermissions 65922649
+⚡️  TO JS undefined
+⚡️  TO JS {"coarseLocation":"granted","location":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 65922650
+⚡️  WebView process terminated
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 6724830
+⚡️  TO JS undefined
+⚡️  To Native ->  Geolocation checkPermissions 6724831
+⚡️  TO JS {"coarseLocation":"granted","location":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 6724832
+⚡️  WebView process terminated
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 1281053
+⚡️  To Native ->  Geolocation checkPermissions 1281054
+⚡️  TO JS undefined
+⚡️  TO JS {"location":"granted","coarseLocation":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 1281055
+⚡️  WebView process terminated
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 102728151
+⚡️  To Native ->  Geolocation checkPermissions 102728152
+⚡️  TO JS undefined
+⚡️  TO JS {"coarseLocation":"granted","location":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 102728153
+⚡️  WebView process terminated
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 13299190
+⚡️  To Native ->  Geolocation checkPermissions 13299191
+⚡️  TO JS undefined
+⚡️  TO JS {"coarseLocation":"granted","location":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 13299192
+⚡️  [warn] - Loading settings took over 8s — continuing without it
+⚡️  [warn] - Loading trips took over 8s — continuing without it
+⚡️  WebView process terminated
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 21940267
+⚡️  To Native ->  Geolocation checkPermissions 21940268
+⚡️  TO JS undefined
+⚡️  TO JS {"coarseLocation":"granted","location":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 21940269
+⚡️  [warn] - Loading settings took over 8s — continuing without it
+⚡️  WebView process terminated
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 52096304
+⚡️  To Native ->  Geolocation checkPermissions 52096305
+⚡️  TO JS undefined
+⚡️  TO JS {"coarseLocation":"granted","location":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 52096306
+⚡️  WebView process terminated
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 34077211
+⚡️  To Native ->  Geolocation checkPermissions 34077212
+⚡️  TO JS undefined
+⚡️  TO JS {"coarseLocation":"granted","location":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 34077213
+⚡️  WebView process terminated
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 7044978
+⚡️  To Native ->  Geolocation checkPermissions 7044979
+⚡️  TO JS undefined
+⚡️  TO JS {"coarseLocation":"granted","location":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 7044980
+⚡️  WebView process terminated
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 44392446
+⚡️  To Native ->  Geolocation checkPermissions 44392447
+⚡️  TO JS undefined
+⚡️  TO JS {"coarseLocation":"granted","location":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 44392448
+⚡️  WebView process terminated
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 86076348
+⚡️  To Native ->  Geolocation checkPermissions 86076349
+⚡️  TO JS undefined
+⚡️  TO JS {"coarseLocation":"granted","location":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 86076350
+⚡️  [warn] - Loading settings took over 8s — continuing without it
+⚡️  [warn] - Loading trips took over 8s — continuing without it
+⚡️  WebView process terminated
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 30031138
+⚡️  To Native ->  Geolocation checkPermissions 30031139
+⚡️  TO JS undefined
+⚡️  TO JS {"location":"granted","coarseLocation":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 30031140
+⚡️  [warn] - Loading settings took over 8s — continuing without it
+⚡️  [warn] - Loading trips took over 8s — continuing without it
+⚡️  WebView process terminated
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 54697511
+⚡️  TO JS undefined
+⚡️  To Native ->  Geolocation checkPermissions 54697512
+⚡️  TO JS {"location":"granted","coarseLocation":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 54697513
+⚡️  WebView process terminated
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 93555183
+⚡️  To Native ->  Geolocation checkPermissions 93555184
+⚡️  TO JS undefined
+⚡️  TO JS {"coarseLocation":"granted","location":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 93555185
+⚡️  [warn] - Loading settings took over 8s — continuing without it
+⚡️  [warn] - Loading trips took over 8s — continuing without it
+⚡️  To Native ->  Filesystem mkdir 93555186
+ERROR MESSAGE:  {"message":"Directory at 'file:\/\/\/Users\/runner\/Library\/Developer\/CoreSimulator\/Devices\/F22FC8BB-6166-471A-868A-40317F40C6B7\/data\/Containers\/Data\/Application\/8C980EB8-B7D8-4200-9683-A91761A40102\/Library\/Caches\/dl\/'  already exists, cannot be overwritten.","errorMessage":"Directory at 'file:\/\/\/Users\/runner\/Library\/Developer\/CoreSimulator\/Devices\/F22FC8BB-6166-471A-868A-40317F40C6B7\/data\/Containers\/Data\/Application\/8C980EB8-B7D8-4200-9683-A91761A40102\/Library\/Caches\/dl\/'  al
+⚡️  [error] - {"message":"Directory at 'file:///Users/runner/Library/Developer/CoreSimulator/Devices/F22FC8BB-6166-471A-868A-40317F40C6B7/data/Containers/Data/Application/8C980EB8-B7D8-4200-9683-A91761A40102/Library/Caches/dl/'  already exists, cannot be overwritten.","errorMessage":"Directory at 'file:///Users/runner/Library/Developer/CoreSimulator/Devices/F22FC8BB-6166-471A-868A-40317F40C6B7/data/Containers/Data/Application/8C980EB8-B7D8-4200-9683-A91761A40102/Library/Caches/dl/'  already exists, cannot be overwritten.","code":"OS-PLUG-FILE-0010"}
+⚡️  To Native ->  Filesystem deleteFile 93555187
+⚡️  TO JS undefined
+⚡️  To Native ->  Filesystem getUri 93555188
+⚡️  TO JS {"uri":"file:\/\/\/Users\/runner\/Library\/Developer\/CoreSimulator\/Devices\/F22FC8BB-6166-471A-868A-40317F40C6B7\/data\/Containers\/Data\/Application\/8C980EB8-B7D8-4200-9683-A91761A40102\/Library\/Caches\/dl\/ksa-satellite-sw-20261124.pmtiles"}
+⚡️  To Native ->  FileTransfer addListener 93555189
+⚡️  To Native ->  FileTransfer downloadFile 93555190
+⚡️  WebView process terminated
+⚡️  WebView loaded
+⚡️  To Native ->  KeepAwake keepAwake 45476447
+⚡️  To Native ->  Geolocation checkPermissions 45476448
+⚡️  TO JS undefined
+⚡️  TO JS {"coarseLocation":"granted","location":"granted"}
+⚡️  To Native ->  Geolocation watchPosition 45476449
