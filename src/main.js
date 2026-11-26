@@ -310,7 +310,7 @@ async function checkUpdates(manual = false) {
           if (!meta) { await store.deleteMapFile(file); throw new Error('the downloaded file is damaged'); }
         }
         changed = true;
-        toast(`${label} updated to ${fmtVer(item.version)} — previous version kept as backup`, 5000);
+        toast(installed[item.key] ? `${label} updated to ${fmtVer(item.version)} — previous version kept as backup` : `${label} installed (${fmtVer(item.version)})`, 5000);
       } catch (e) {
         console.warn('Update failed', item.kind, e?.message || e);
         state.update.lastError = `${item.kind}: ${e?.message || e}`;

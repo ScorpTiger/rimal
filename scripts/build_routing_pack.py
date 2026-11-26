@@ -28,6 +28,7 @@ SPEED = {'motorway': 110, 'trunk': 100, 'primary': 80, 'secondary': 70, 'tertiar
          'residential': 35, 'living_street': 15, 'service': 20, 'track': 25, 'motorway_link': 60,
          'trunk_link': 55, 'primary_link': 50, 'secondary_link': 45, 'tertiary_link': 40, 'road': 40}
 CLS = {c: i for i, c in enumerate(CLASSES)}
+MIN_ISLAND = 40
 CELL = 0.25
 NO_ACCESS = {'no', 'private'}
 SKIP_SERVICE = {'parking_aisle', 'driveway', 'drive-through'}
@@ -141,12 +142,33 @@ def main():
             cell['lon'].append(int(lon[i])); cell['lat'].append(int(lat[i])); cell['out'].append([])
             k = (c << 19) | loc; node_key[osm] = k
         return k
+    # Drop small road islands (a car park, a lone service road): a start or destination snapped onto
+    # one would make routing fail, so every point snaps onto the connected road network instead.
+    jpos = np.flatnonzero(is_j); jid = np.searchsorted(uniq, ids[jpos])
+    parent = np.arange(len(uniq), dtype=np.int64)
+    def find(x):
+        r = x
+        while parent[r] != r: r = parent[r]
+        while parent[x] != r: parent[x], x = r, parent[x]
+        return r
+    starts = np.searchsorted(jpos, ws[:-1]); ends = np.searchsorted(jpos, ws[1:])
+    for w in range(h.n):
+        js = jid[starts[w]:ends[w]]
+        for u, v in zip(js, js[1:]):
+            ru, rv = find(int(u)), find(int(v))
+            if ru != rv: parent[ru] = rv
+    roots = np.array([find(int(x)) for x in np.unique(jid)])
+    rr, rc = np.unique(roots, return_counts=True)
+    big = set(int(r) for r, c in zip(rr, rc) if c >= MIN_ISLAND)
+    keep_way = np.array([bool(ends[w] > starts[w]) and find(int(jid[starts[w]])) in big for w in range(h.n)])
+    print(f'{len(rr):,} road networks; keeping {len(big):,} with {MIN_ISLAND}+ junctions, {int(keep_way.sum()):,} of {h.n:,} roads ({time.time() - t0:.0f} s)', flush=True)
     names = {}
     def name_id(s):
         if not s: return 0xFFFF
         return names.setdefault(s, len(names)) if len(names) < 0xFFFE else 0xFFFF
     n_edges = 0
     for w in range(h.n):
+        if not keep_way[w]: continue
         s, e = int(ws[w]), int(ws[w + 1])
         cls, fl, d, nm = h.wcls[w], h.wflags[w], h.wdir[w], name_id(h.wname[w])
         j = [i for i in range(s, e) if is_j[i]]

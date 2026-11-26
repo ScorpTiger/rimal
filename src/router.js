@@ -175,6 +175,8 @@ export class RoadRouter {
     const offroadEnd = b.dist > 60 ? b.dist : 0;
     if (b.dist > 5) coords.push(to);
     const total = coords.slice(1).reduce((s, c, i) => s + hav(coords[i][0], coords[i][1], c[0], c[1]), 0);
+    // Two prompts for one manoeuvre (a slip road onto the same street) read as one.
+    for (let i = steps.length - 1; i > 0; i--) if (steps[i].name && steps[i].name === steps[i - 1].name && steps[i].type === steps[i - 1].type && steps[i].dist - steps[i - 1].dist < 150) steps.splice(i, 1);
     for (const s of steps) s.text = stepText(s);
     steps.push({ at: to, dist: total, type: 'arrive', text: offroadEnd ? `Leave the road and continue ${Math.round(offroadEnd)} m off-road to the destination` : 'Arrive at the destination' });
     return { coords, dist: total, time: g.get(found) + (offroadEnd / 4), steps, offroadEnd, offroadStart: a.dist > 60 ? a.dist : 0, expanded };
