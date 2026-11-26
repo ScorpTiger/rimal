@@ -306,3 +306,5 @@ body.hidechrome { --tool-w: 0px; }
 .row.svc .mv { display: flex; flex-direction: column; gap: 4px; margin-right: 8px; }
 .row.svc .mv .btn { padding: 4px 10px; min-width: 40px; }
 .row.svc .mv .btn[disabled] { opacity: .25; }
+#routeOffer { position: absolute; left: 50%; transform: translateX(-50%); top: 62px; z-index: 30; background: var(--panel); border: 1px solid var(--accent); border-radius: 14px; padding: 8px 10px 8px 14px; display: flex; gap: 10px; align-items: center; box-shadow: 0 6px 24px rgba(0,0,0,.4); max-width: calc(100% - 20px); }
+#routeOffer span { font-size: 14px; }

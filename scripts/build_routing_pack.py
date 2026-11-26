@@ -125,10 +125,11 @@ def main():
 
     # Number the junction nodes per cell.
     nx = math.ceil((bbox[2] - bbox[0]) / CELL); ny = math.ceil((bbox[3] - bbox[1]) / CELL)
+    if (nx * ny) << 19 >= 1 << 32: raise SystemExit('area too large for 32-bit node keys')
     def cid_of(x, y):
         cx = min(nx - 1, max(0, int((x * 1e-6 - bbox[0]) / CELL))); cy = min(ny - 1, max(0, int((y * 1e-6 - bbox[1]) / CELL)))
         return cy * nx + cx
-    node_key = {}            # osm id → (cid << 20) | local
+    node_key = {}            # osm id → (cid << 19) | local (fits uint32 for KSA)
     cells = {}               # cid → {'lon': [], 'lat': [], 'out': [[edges]...]}
     def node(i):
         osm = int(ids[i]); k = node_key.get(osm)
@@ -136,9 +137,9 @@ def main():
             c = cid_of(int(lon[i]), int(lat[i]))
             cell = cells.setdefault(c, {'lon': [], 'lat': [], 'out': []})
             loc = len(cell['lon'])
-            if loc >= (1 << 20): raise SystemExit('cell too dense')
+            if loc >= (1 << 19): raise SystemExit('cell too dense')
             cell['lon'].append(int(lon[i])); cell['lat'].append(int(lat[i])); cell['out'].append([])
-            k = (c << 20) | loc; node_key[osm] = k
+            k = (c << 19) | loc; node_key[osm] = k
         return k
     names = {}
     def name_id(s):
@@ -155,8 +156,8 @@ def main():
             if length <= 0: continue
             geo = simplify(pts)[1:-1]
             ka, kb = node(a_i), node(b_i)
-            if d >= 0: cells[ka >> 20]['out'][ka & 0xFFFFF].append((kb, length, geo, nm, cls, fl)); n_edges += 1
-            if d <= 0: cells[kb >> 20]['out'][kb & 0xFFFFF].append((ka, length, geo[::-1], nm, cls, fl)); n_edges += 1
+            if d >= 0: cells[ka >> 19]['out'][ka & 0x7FFFF].append((kb, length, geo, nm, cls, fl)); n_edges += 1
+            if d <= 0: cells[kb >> 19]['out'][kb & 0x7FFFF].append((ka, length, geo[::-1], nm, cls, fl)); n_edges += 1
         if w % 200000 == 0 and w: print(f'  edges for {w:,} roads…', flush=True)
     print(f'{len(node_key):,} junctions, {n_edges:,} directed edges in {len(cells):,} cells ({time.time() - t0:.0f} s)', flush=True)
 

@@ -94,7 +94,7 @@ export const DEFAULTS = {
   voice: false,             // spoken navigation and warnings
   voiceRate: 1,
   appUpdateDismissed: 0,
-  packSkip: [],
+  packSkip: [], routingAsked: false, roadRoute: true, avoidTracks: false,
   roadSnap: true,           // keep the position on the road when driving on streets
   gpsLearn: true,           // learn the GPS's bias on roads and correct it everywhere
   snapTracks: false,

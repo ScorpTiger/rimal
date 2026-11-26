@@ -16,6 +16,7 @@ import { CRUISER_SVG, ARROW_SVG } from './vehicle.js';
 import * as act from './activity.js';
 import { RoadMatcher, BiasLearner } from './matcher.js';
 import { writePMTiles } from './pmwriter.js';
+import { RoadRouter } from './router.js';
 import { planNight, nextNights } from './stars.js';
 import { fuelStats, rangeFrom, defaultChecklist, filesFromZip } from './triptools.js';
 import { sunTimes, hhmm, weather, WX, POI_CATS, setPOIs, poiCount, nearest, search as poiSearch, poiGeoJSON, profileSVG } from './extras.js';
@@ -200,7 +201,7 @@ function updateNoMapHint() {
   const kinds = new Set(Object.values(state.maps).map((m) => m.kind));
   if (kinds.size) {
     $('noMap').querySelector('h2').textContent = 'Street map not installed yet';
-    $('noMapText').innerHTML = `Installed: <b>${[...kinds].map((k) => ({ satellite: 'satellite imagery', terrain: 'terrain' }[k] || k)).join(', ')}</b>. Missing: the street &amp; track map <b>ksa-map.pmtiles</b> (956 MB). Import it from USB, or tap Download.${state.lastImportFail ? `<br><span style="color:#ffb020">Last import: ${esc(state.lastImportFail)}</span>` : ''}`;
+    $('noMapText').innerHTML = `Installed: <b>${[...kinds].map((k) => ({ satellite: 'satellite imagery', terrain: 'terrain', routing: 'road directions' }[k] || k)).join(', ')}</b>. Missing: the street &amp; track map <b>ksa-map.pmtiles</b> (956 MB). Import it from USB, or tap Download.${state.lastImportFail ? `<br><span style="color:#ffb020">Last import: ${esc(state.lastImportFail)}</span>` : ''}`;
   }
   $('noMapDl').disabled = !!state.update.busy;
   $('noMapProg').textContent = state.update.msg || state.update.lastError || '';
@@ -238,6 +239,13 @@ function updateNavLine() {
 async function registerMap(name) {
   const file = await store.getMapFile(name);
   if (!file) return null;
+  if (/\.rrt$/i.test(name)) {
+    // Road-directions pack: a road graph, not map tiles.
+    const router = await new RoadRouter(file).open();
+    const meta = { name, kind: 'routing', version: packs.versionOf(name), size: file.size, router, bounds: router.index.bbox };
+    state.maps[name] = meta;
+    return meta;
+  }
   const pm = new PMTiles(new FileSource(file));
   const h = await pm.getHeader();
   let md = {};
@@ -261,6 +269,7 @@ async function loadMaps() {
   // Vector base: the user's choice if it still opens, else the newest, else the previous (automatic fallback).
   const vec = byNewest('vector');
   if (!S.baseMap || !state.maps[S.baseMap] || S.autoBase !== false) S.baseMap = vec[0]?.name || null;
+  state.router = byNewest('routing')[0]?.router || null;
   tiles.setPacks('sat', byNewest('satellite').map((m) => ({ name: m.name, pm: m.pm, minZoom: m.minZoom, maxZoom: m.maxZoom })));
   tiles.setPacks('dem', byNewest('terrain').map((m) => ({ name: m.name, pm: m.pm, minZoom: m.minZoom, maxZoom: m.maxZoom })));
   const poi = await packs.latestPOI();
@@ -286,7 +295,9 @@ async function checkUpdates(manual = false) {
     // A pack copied in by USB keeps the published file name (no date); it is the same file if the size matches.
     const sameFile = (r) => Object.values(state.maps).some((m) => m.version === '00000000' && packs.keyOfFile(m.name, m.kind) === r.key && m.size === r.size);
     // Packs the user switched off (e.g. far-away satellite regions on a small car screen) are left out.
-    const todo = Object.values(remote).filter((r) => (!installed[r.key] || installed[r.key][0] < r.version) && !sameFile(r) && !(S.packSkip || []).includes(r.key));
+    // Road directions are big and optional: ask once before the first download.
+    if (remote.routing && !installed.routing && !S.routingAsked) showRoutingOffer(remote.routing);
+    const todo = Object.values(remote).filter((r) => (!installed[r.key] || installed[r.key][0] < r.version) && !sameFile(r) && !(S.packSkip || []).includes(r.key) && (r.key !== 'routing' || S.routingAsked));
     if (!todo.length) { setUpdateMsg(''); if (manual) toast('Maps are up to date'); return; }
     let changed = false;
     for (const item of todo) {
@@ -693,7 +704,8 @@ function startGoto(target, name) {
   act.log('nav', `go to “${name}”`, { target });
   $('navBar').hidden = false; $('navOffWrap').hidden = true;
   refreshOverlays();
-  if (state.fix) { navigate(state.fix); say(`Going to ${name}. ${spokenDist(distance([state.fix.lon, state.fix.lat], target))}, ${CARD_WORDS[cardinal(bearing([state.fix.lon, state.fix.lat], target))] || ''}. Straight line, not along roads.`); } else toast('Navigation set — waiting for GPS');
+  const byRoad = roadRouting();
+  if (state.fix) { if (!byRoad) say(`Going to ${name}. ${spokenDist(distance([state.fix.lon, state.fix.lat], target))}, ${CARD_WORDS[cardinal(bearing([state.fix.lon, state.fix.lat], target))] || ''}. Straight line, not along roads.`); navigate(state.fix); } else toast(byRoad ? 'Navigation set — the road route is worked out when GPS has a fix' : 'Navigation set — waiting for GPS');
   state.follow = true; $('bFollow').classList.add('on');
 }
 function startRoute(coords, name, reverse, label) {
@@ -711,6 +723,92 @@ function startRoute(coords, name, reverse, label) {
   say(`${state.nav.name.replace(':', '.')}. ${spokenDist(state.nav.cum.at(-1))}.`);
   state.follow = true; $('bFollow').classList.add('on');
 }
+/* ---------- Road directions (optional pack) ---------- */
+const roadRouting = () => !!state.router && S.roadRoute !== false;
+const ARROWS = { left: '↰', right: '↱', 'sharp left': '↰', 'sharp right': '↱', 'keep left': '↖', 'keep right': '↗', uturn: '⮌', roundabout: '⟳', arrive: '⚑' };
+async function planRoad(n, me, reroute = false) {
+  if (n.planning) return;
+  n.planning = true; n.lastPlan = Date.now();
+  const t0 = performance.now();
+  try {
+    const res = await state.router.route(me, n.target, { avoidTracks: !!S.avoidTracks });
+    if (state.nav !== n) return;
+    const straight = distance(me, n.target);
+    if (!res || res.offroadStart > 3000) {
+      act.log('nav', `road route: none (${res ? Math.round(res.offroadStart) + ' m from the nearest road' : 'no connection'}) — straight line`);
+      if (!reroute) { toast('No road route to there — showing the straight line', 5000); say(`Going to ${n.name}. ${spokenDist(straight)}. Straight line, no road route found.`); }
+      return;
+    }
+    const route = [res.coords[0]];
+    for (const p of res.coords) if (distance(route.at(-1), p) >= 3) route.push(p);
+    if (route.at(-1) !== res.coords.at(-1)) route.push(res.coords.at(-1));
+    const cum = cumulative(route);
+    let h = null;
+    const steps = res.steps.map((s) => { const l = locateOnRoute(s.at, route, cum, h); h = l.segment; return { ...s, along: s.type === 'arrive' ? cum.at(-1) - (res.offroadEnd || 0) : l.along, said: new Set() }; });
+    Object.assign(n, { kind: 'road', route, cum, steps, time: res.time, hint: null, offSince: null, offAlerted: false, offroadEnd: res.offroadEnd });
+    act.log('nav', `road route ${reroute ? 're' : ''}calculated in ${Math.round(performance.now() - t0)} ms`, { km: +(res.dist / 1000).toFixed(1), min: Math.round(res.time / 60), steps: steps.length, offroadEnd: Math.round(res.offroadEnd), nodes: res.expanded });
+    $('navOffWrap').hidden = false;
+    refreshOverlays();
+    if (reroute) say('Route recalculated');
+    else {
+      const first = steps.find((s) => s.type !== 'arrive');
+      say(`Going to ${n.name} along roads. ${spokenDist(res.dist)}, about ${Math.max(1, Math.round(res.time / 60))} minutes.${first ? ` In ${spokenDist(Math.max(0, first.along))}, ${first.text}.` : ''}`);
+      if (state.fix) navigate(state.fix);
+    }
+  } catch (e) {
+    act.log('error', `road routing failed: ${e?.message || e}`);
+  } finally { n.planning = false; }
+}
+function roadProgress(n, f, me, loc, off) {
+  // Next instruction, its distance and spoken prompts.
+  const next = n.steps.find((s) => s.along > loc.along - 5);
+  if (next) {
+    const d = Math.max(0, next.along - loc.along);
+    n.stepText = `${ARROWS[next.type] || '↑'} ${fmtDist(d, S.units)} · ${next.text}`;
+    const prompts = (f.speed || 0) > 16 ? [1500, 400, 120] : [600, 200, 60];
+    const p = prompts.find((x) => d <= x && !next.said.has(x));
+    if (p != null) { prompts.filter((x) => x >= p).forEach((x) => next.said.add(x)); if (next.type !== 'arrive' || next.text.startsWith('Leave')) say(p === prompts[2] ? next.text : `In ${spokenDist(d)}, ${next.text}`); }
+  }
+  // Off the road route: recalculate (not while the GPS is poor or parked).
+  const away = off > Math.max(50, Math.min(150, (f.acc || 20) * 2)) && (f.speed || 0) > 2;
+  if (!away) { n.offSince = null; return; }
+  n.offSince ||= Date.now();
+  if (Date.now() - n.offSince > 6000 && Date.now() - (n.lastPlan || 0) > 15000 && distance(me, n.target) > S.arrivalRadius * 2) planRoad(n, me, true);
+}
+function showRoutingOffer(item) {
+  if (!item || $('routeOffer')) return;
+  const el = document.createElement('div');
+  el.id = 'routeOffer';
+  el.innerHTML = `<span>New: <b>road directions</b> — optional ${gb(item.size)} download</span><button class="primary sm">Choose…</button><button class="btn sm">✕</button>`;
+  $('app').appendChild(el);
+  const [go, x] = el.querySelectorAll('button');
+  go.onclick = () => { el.remove(); routingOfferSheet(item); };
+  x.onclick = () => el.remove(); // asked again at the next check
+  act.log('update', `road directions offered (${gb(item.size)})`);
+}
+function routingOfferSheet(item) {
+  $('routeOffer')?.remove();
+  const size = item ? gb(item.size) : 'a large';
+  openSheet('Road directions', `
+    <p>Rimal can work out routes <b>along roads and streets</b> — like a car sat-nav — and speak each turn: <i>“In 300 metres, turn right onto King Fahd Road.”</i> If your destination is off the road, the route ends at the nearest road and a straight line takes you the rest of the way.</p>
+    <p class="warnbox">This is an extra <b>${size}</b> download for the whole of Saudi Arabia, and it takes the same space on this unit. Use Wi-Fi, or copy the file from USB.</p>
+    <p class="note">Without it, Go To keeps showing the straight line and direction to the target, as today. You can add or remove road directions any time in <b>Maps → Updates &amp; files</b>.</p>
+    <div class="btns"><button class="primary" data-a="yes">⬇ Download road directions</button><button class="btn" data-a="no">Not now</button></div>`, {
+    yes: () => { const set = new Set(S.packSkip || []); set.delete('routing'); setS('packSkip', [...set]); setS('routingAsked', true); act.log('update', 'road directions: user chose download'); closeSheet(); checkUpdates(true); },
+    no: () => { const set = new Set(S.packSkip || []); set.add('routing'); setS('packSkip', [...set]); setS('routingAsked', true); act.log('update', 'road directions: user chose not now'); closeSheet(); toast('OK — add road directions later in Maps → Updates & files', 5000); },
+  });
+}
+async function removeRouting(ask) {
+  const files = Object.values(state.maps).filter((m) => m.kind === 'routing');
+  if (!files.length) return;
+  const total = files.reduce((t, m) => t + (m.size || 0), 0);
+  if (ask && !(await confirmBox(`Remove road directions from this unit and free ${gb(total)}? Go To will use the straight line again.`))) return mapsSheet();
+  for (const m of files) await store.deleteMapFile(m.name);
+  act.log('data', `road directions removed (${gb(total)})`);
+  await loadMaps(); mapsSheet();
+  toast('Road directions removed', 4000);
+}
+
 function stopNav() { if (state.nav) act.log('nav', 'navigation stopped'); state.nav = null; $('navBar').hidden = true; hideAlert(); refreshOverlays(); }
 
 function navigate(f) {
@@ -718,6 +816,7 @@ function navigate(f) {
   if (!n) return;
   const me = [f.lon, f.lat];
   let dist, aim, off = null;
+  if (n.kind === 'goto' && !n.roadTried && roadRouting()) { n.roadTried = true; planRoad(n, me); }
   if (n.kind === 'goto') { dist = distance(me, n.target); aim = n.target; }
   else {
     const loc = locateOnRoute(me, n.route, n.cum, n.hint);
@@ -727,18 +826,19 @@ function navigate(f) {
     aim = off > 150 ? loc.point : pointAlong(n.route, n.cum, loc.along + look);
     $('navOff').textContent = fmtDist(off, S.units);
     $('navOff').style.color = off > S.offRouteAlert ? 'var(--danger)' : '';
-    if (off > S.offRouteAlert && !n.offAlerted) { n.offAlerted = true; alertBar(`OFF TRACK · ${fmtDist(off, S.units)}`); beep(2); }
+    if (n.kind === 'road') roadProgress(n, f, me, loc, off);
+    else if (off > S.offRouteAlert && !n.offAlerted) { n.offAlerted = true; alertBar(`OFF TRACK · ${fmtDist(off, S.units)}`); beep(2); }
     else if (off < S.offRouteAlert * 0.6 && n.offAlerted) { n.offAlerted = false; hideAlert(); }
   }
   n.aim = aim; n.dist = dist;
   const brg = bearing(me, aim);
   const rel = f.heading != null ? brg - f.heading : brg - map.getBearing();
   $('navArrowSvg').style.transform = `rotate(${rel}deg)`;
-  $('navName').textContent = n.name;
+  $('navName').textContent = n.kind === 'road' && n.stepText ? n.stepText : n.name;
   $('navDist').textContent = fmtDist(dist, S.units);
   $('navBrg').textContent = `${Math.round(brg)}° ${cardinal(brg)}`;
   const spd = f.speed > 1.5 ? f.speed : null;
-  $('navEta').textContent = spd ? fmtDuration(dist / spd) : '—';
+  $('navEta').textContent = spd ? fmtDuration(dist / spd) : n.kind === 'road' && n.time ? fmtDuration(n.time * dist / Math.max(1, n.cum.at(-1))) : '—';
   if (!n.arrived && distance(me, n.target) < S.arrivalRadius && (n.kind === 'goto' || n.cum.at(-1) - (n.cum[n.hint] || 0) < S.arrivalRadius * 3)) {
     n.arrived = true; alertBar(`ARRIVED · ${n.name}`, true); beep(3); setTimeout(hideAlert, 8000);
   }
@@ -900,6 +1000,7 @@ function gotoSheet() {
   const wps = [...state.waypoints].sort((a, b) => (me ? distance(me, [a.lon, a.lat]) - distance(me, [b.lon, b.lat]) : b.created - a.created));
   openSheet('Go To', `
     <div class="field"><label>Coordinates</label><input type="text" id="gCoord" placeholder="24.7136, 46.6753 · N24 42.816 E46 40.518 · Google Maps link"></div>
+    ${state.router ? `<div class="field"><label>Route</label>${segHtml('roadRoute', [['true', '🛣 Along roads'], ['false', '➝ Straight line']])}</div>${S.roadRoute !== false ? `<label class="toggle"><span>Avoid desert tracks</span><input type="checkbox" id="gAvoid" ${S.avoidTracks ? 'checked' : ''}></label>` : ''}` : `<p class="note">Go To shows the straight line. For directions along roads, add <b>Road directions</b> in Maps → Updates &amp; files.</p>`}
     <div class="btns" style="margin-bottom:16px"><button class="primary" data-a="go">➤ Navigate</button><button class="btn" data-a="save">⚑ Save as waypoint</button><button class="btn" data-a="show">Show on map</button></div>
     <div class="field"><label>Project a point — bearing and distance from ${me ? 'your position' : 'the map centre'}</label>
       <div class="btns"><input type="number" id="pBrg" placeholder="Bearing °" style="flex:1"><input type="number" id="pDist" placeholder="Distance ${S.units === 'imperial' ? 'mi' : 'km'}" style="flex:1"><button class="btn" data-a="proj">➤ Go</button></div></div>
@@ -916,7 +1017,9 @@ function gotoSheet() {
       closeSheet(); startGoto(c, `${Math.round(b)}° / ${dk} ${S.units === 'imperial' ? 'mi' : 'km'}`);
     },
     wp: (id) => { const w = state.waypoints.find((x) => x.id === id); closeSheet(); startGoto([w.lon, w.lat], w.name); },
+    set: (id) => { const [k, v] = id.split(':'); const keep = $('gCoord')?.value; setS(k, v === 'true'); gotoSheet(); if (keep) $('gCoord').value = keep; },
   });
+  const av = $('gAvoid'); if (av) av.onchange = (e) => setS('avoidTracks', e.target.checked);
 }
 
 /* ---------- Search & POIs ---------- */
@@ -1165,7 +1268,7 @@ async function restoreBackup(b) {
   if (!(await confirmBox(`Restore backup from ${new Date(b.at).toLocaleString()}? Trips and waypoints are merged with what is on this device.`))) return;
   for (const t of b.tracks || []) { await store.put('tracks', t); if (!state.tracks.some((x) => x.id === t.id)) state.tracks.push(t); }
   for (const w of b.waypoints || []) { await store.put('waypoints', w); if (!state.waypoints.some((x) => x.id === w.id)) state.waypoints.push(w); }
-  for (const k of ['units', 'coordFormat', 'fields', 'fuelRange', 'pitchWarn', 'rollWarn', 'updateRepo', 'satSource', 'mapMode', 'lang', 'tankL', 'odometer', 'voice', 'tint', 'tintDim', 'roadSnap', 'gpsLearn', 'vehicleIcon', 'tripPeople', 'tripDays', 'packSkip']) if (b.settings?.[k] != null) setS(k, b.settings[k]);
+  for (const k of ['units', 'coordFormat', 'fields', 'fuelRange', 'pitchWarn', 'rollWarn', 'updateRepo', 'satSource', 'mapMode', 'lang', 'tankL', 'odometer', 'voice', 'tint', 'tintDim', 'roadSnap', 'gpsLearn', 'vehicleIcon', 'tripPeople', 'tripDays', 'packSkip', 'roadRoute', 'avoidTracks', 'routingAsked']) if (b.settings?.[k] != null) setS(k, b.settings[k]);
   // Fuel log, service checklist and trip checklist (backups from version 4.1 on).
   for (const [k, v] of Object.entries(b.kv || {})) {
     if (k === 'fuellog') { const cur = (await store.get('kv', 'fuellog')) || []; const ids = new Set(cur.map((x) => x.id)); await store.put('kv', [...cur, ...v.filter((x) => !ids.has(x.id))], 'fuellog'); }
@@ -1211,10 +1314,11 @@ async function mapsSheet() {
       ${[...new Set([...Object.keys(packs.KINDS), ...Object.keys(state.remote || {}), ...Object.keys(inst)])].sort().map((k) => {
         const v = inst[k] || []; const r = state.remote?.[k];
         const skip = (S.packSkip || []).includes(k);
+        if (k === 'routing' && !S.routingAsked && !v.length) return `<div class="row"><div class="grow"><div class="title">${packs.label(k)}</div><div class="sub">Optional${r ? ` · ${gb(r.size)} download` : ''} · directions along roads and streets, spoken turn by turn</div></div><button class="primary sm" data-a="routeoffer">Choose…</button></div>`;
         return `<div class="row"><div class="grow"><div class="title">${packs.label(k)}</div><div class="sub">${v.length ? 'In use: ' + fmtVer(v[0]) + (v[1] ? ' · backup: ' + fmtVer(v[1]) : '') : 'Not installed'}${r ? ` · latest online: ${fmtVer(r.version)} (${gb(r.size)})` : ''}${skip ? ' · <b>not downloaded</b>' : ''}</div></div><label class="toggle mini" title="Download and update this pack"><input type="checkbox" data-pack="${k}" ${skip ? '' : 'checked'}></label></div>`;
       }).join('')}
       <h3>Files on this unit</h3>
-      ${files.length ? files.map((m) => `<div class="row"><div class="grow"><div class="title">${esc(m.name)}</div><div class="sub">${m.kind} · zoom ${m.minZoom}–${m.maxZoom} · ${gb(m.size)}${S.baseMap === m.name ? ' · <b>ACTIVE</b>' : ''}</div></div>${m.kind === 'vector' && S.baseMap !== m.name ? `<button class="btn sm" data-a="usebase" data-id="${m.name}">Use</button>` : ''}<button class="btn sm danger" data-a="mdel" data-id="${m.name}">✕</button></div>`).join('') : '<div class="empty">No offline map files yet</div>'}
+      ${files.length ? files.map((m) => `<div class="row"><div class="grow"><div class="title">${esc(m.name)}</div><div class="sub">${m.kind === 'routing' ? 'road directions' : `${m.kind} · zoom ${m.minZoom}–${m.maxZoom}`} · ${gb(m.size)}${S.baseMap === m.name ? ' · <b>ACTIVE</b>' : ''}</div></div>${m.kind === 'vector' && S.baseMap !== m.name ? `<button class="btn sm" data-a="usebase" data-id="${m.name}">Use</button>` : ''}<button class="btn sm danger" data-a="mdel" data-id="${m.name}">✕</button></div>`).join('') : '<div class="empty">No offline map files yet</div>'}
       <p class="note" id="mStore"></p>`,
   };
   openSheet('Maps & layers', `
@@ -1235,7 +1339,8 @@ async function mapsSheet() {
       await store.del('areas', id); state.areas = others; mapsSheet();
     },
     check: () => { saveUpdateFields(); checkUpdates(true); mapsSheet(); },
-    import: () => pickFile('.pmtiles,.json,application/octet-stream,*/*', importMapFiles, true),
+    routeoffer: () => routingOfferSheet(state.remote?.routing),
+    import: () => pickFile('.pmtiles,.json,.rrt,application/octet-stream,*/*', importMapFiles, true),
     usebase: (id) => { S.autoBase = false; store.saveSetting('autoBase', false); setS('baseMap', id, true); mapsSheet(); },
     mdel: async (id) => {
       if (!(await confirmBox(`Delete map file “${esc(id)}” from this unit?`))) return;
@@ -1250,7 +1355,7 @@ async function mapsSheet() {
   on('mWpts', (e) => { setS('showWaypoints', e.target.checked); refreshOverlays(); });
   on('mCache', (e) => { setS('cacheWhileBrowsing', e.target.checked); tiles.configure({ cacheWhileBrowsing: S.cacheWhileBrowsing }); });
   on('mCustom', (e) => { setS('customSatUrl', e.target.value.trim()); tiles.configure({ customUrl: S.customSatUrl }); applyStyle(); });
-  $('sheetBody').querySelectorAll('[data-pack]').forEach((el) => (el.onchange = () => { const k = el.dataset.pack; const set = new Set(S.packSkip || []); el.checked ? set.delete(k) : set.add(k); setS('packSkip', [...set]); }));
+  $('sheetBody').querySelectorAll('[data-pack]').forEach((el) => (el.onchange = () => { const k = el.dataset.pack; const set = new Set(S.packSkip || []); el.checked ? set.delete(k) : set.add(k); setS('packSkip', [...set]); if (k === 'routing') { setS('routingAsked', true); if (el.checked) checkUpdates(true); else removeRouting(true); } }));
   on('uRepo', saveUpdateFields); on('uTok', saveUpdateFields);
   const op = $('mSatOp'); if (op) op.oninput = (e) => { S.satOpacity = +e.target.value; if (map.getLayer('satellite')) map.setPaintProperty('satellite', 'raster-opacity', S.satOpacity); store.saveSetting('satOpacity', S.satOpacity); };
   document.querySelectorAll('input[name=satsrc]').forEach((r) => (r.onchange = () => { setS('satSource', r.value); tiles.configure({ satSource: S.satSource }); applyStyle(); mapsSheet(); }));
@@ -1355,7 +1460,7 @@ function resumeAreaDownloads(reason) {
 async function importMapFiles(files) {
   files = files.filter(Boolean);
   if (!files.length) return;
-  const okExt = (f) => /\.(pmtiles|json)$/i.test(f.name);
+  const okExt = (f) => /\.(pmtiles|json|rrt)$/i.test(f.name);
   const bad = files.filter((f) => !okExt(f));
   if (bad.length && !(await confirmBox(`${bad.map((f) => esc(f.name)).join(', ')} ${bad.length > 1 ? 'are' : 'is'} not a .pmtiles or .json map file. MBTiles must be converted first (see guide). Try anyway?`))) return;
   const done = [], failed = [];
@@ -1374,6 +1479,7 @@ async function importMapFiles(files) {
       }
       const res = await store.importMapFile(file, bar);
       const meta = await registerMap(res.name);
+      if (meta?.kind === 'routing') setS('routingAsked', true);
       if (!res.persisted) { failed.push(`${file.name}: could not be saved into the app (${res.error?.message || 'storage refused'}) — it works only until Rimal closes. Check free space in Android Settings → Storage.`); state.lastImportFail = `${file.name} could not be saved (${res.error?.message || 'storage refused'})`; }
       else done.push(`${file.name} (${meta.kind})`);
     } catch (e) {
@@ -1660,7 +1766,7 @@ function say(text, force = false) {
 }
 const CALLOUTS = [20000, 10000, 5000, 2000, 1000, 500, 200, 100];
 function voiceNav(n, dist, brg) {
-  if (!S.voice || n.arrived) return;
+  if (!S.voice || n.arrived || n.kind === 'road') return;
   n.said ||= new Set();
   const step = CALLOUTS.find((c) => dist <= c && dist > c * 0.6 && !n.said.has(c));
   if (step) { n.said.add(step); CALLOUTS.filter((c) => c > step).forEach((c) => n.said.add(c)); say(`${spokenDist(dist)} to ${n.name.replace(/^(Route|Follow|TrackBack): /, '')}, heading ${CARD_WORDS[cardinal(brg)] || ''}`); }

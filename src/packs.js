@@ -10,7 +10,7 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import { FileTransfer } from '@capacitor/file-transfer';
 import * as store from './storage.js';
 
-export const KINDS = { map: 'Street & track map', terrain: 'Terrain (3D, hillshade, contours)', satellite: 'Satellite overview (zoom 10)', poi: 'Places & POIs (search)' };
+export const KINDS = { map: 'Street & track map', terrain: 'Terrain (3D, hillshade, contours)', satellite: 'Satellite overview (zoom 10)', poi: 'Places & POIs (search)', routing: 'Road directions (turn-by-turn on roads)' };
 const REGIONS = { nw: 'north-west', ne: 'north-east', sw: 'south-west', se: 'south-east' };
 /** Human label for a pack key such as "map" or "satellite-nw". */
 export function label(key) {
@@ -19,13 +19,14 @@ export function label(key) {
   return KINDS[kind] || key;
 }
 /** Pack key from a stored file name: ksa-satellite-nw-20261124.pmtiles → satellite-nw */
-export const keyOfFile = (name, kind) => (/^ksa-/.test(name) ? name.replace(/^ksa-/, '').replace(/\.(pmtiles|json)$/i, '').replace(/-\d{8}.*$/, '').replace(/^vector$/, 'map') : kind === 'vector' ? 'map' : kind);
+export const keyOfFile = (name, kind) => (/^ksa-/.test(name) ? name.replace(/^ksa-/, '').replace(/\.(pmtiles|json|rrt)$/i, '').replace(/-\d{8}.*$/, '').replace(/^vector$/, 'map') : kind === 'vector' ? 'map' : kind);
 export const KEEP_VERSIONS = 2;
 
 export const versionOf = (name) => (name.match(/(\d{8})/) || [])[1] || '00000000';
 export function kindOfFile(name, meta = {}) {
   const n = name.toLowerCase();
   if (meta.rimal_kind) return meta.rimal_kind;
+  if (/\.rrt$/.test(n) || /routing/.test(n)) return 'routing';
   if (/terrain|dem|elev/.test(n)) return 'terrain';
   if (/sat|imagery|aerial|ortho/.test(n)) return 'satellite';
   return null; // decided from the tile type by the caller
@@ -45,9 +46,9 @@ export async function listRemote(repo, token) {
   const releases = await r.json();
   const newest = {};
   for (const rel of releases) {
-    const m = rel.tag_name.match(/^pack-(map|terrain|satellite|poi)(?:-([a-z]{2}))?-(\d{8})/);
+    const m = rel.tag_name.match(/^pack-(map|terrain|satellite|poi|routing)(?:-([a-z]{2}))?-(\d{8})/);
     if (!m || rel.draft) continue;
-    const asset = rel.assets.find((a) => /\.(pmtiles|json)$/.test(a.name));
+    const asset = rel.assets.find((a) => /\.(pmtiles|json|rrt)$/.test(a.name));
     if (!asset) continue;
     const [, kind, region, version] = m;
     const key = region ? `${kind}-${region}` : kind;
@@ -60,7 +61,7 @@ export async function listRemote(repo, token) {
 
 /** Download one pack version into on-device storage. Returns the stored file name. */
 export async function download(item, token, onProgress, signal) {
-  const ext = item.name.endsWith('.json') ? 'json' : 'pmtiles';
+  const ext = item.name.endsWith('.json') ? 'json' : item.name.endsWith('.rrt') ? 'rrt' : 'pmtiles';
   const file = `ksa-${item.key || item.kind}-${item.version}.${ext}`;
   let stream;
   let cleanup = async () => {};

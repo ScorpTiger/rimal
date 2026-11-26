@@ -5,7 +5,7 @@ import { gunzipSync, strFromU8 } from 'fflate';
 const R = 6371008.8, RAD = Math.PI / 180;
 const hav = (lon1, lat1, lon2, lat2) => { const a = 0.5 - Math.cos((lat2 - lat1) * RAD) / 2 + Math.cos(lat1 * RAD) * Math.cos(lat2 * RAD) * (1 - Math.cos((lon2 - lon1) * RAD)) / 2; return 2 * R * Math.asin(Math.sqrt(Math.min(1, a))); };
 const bearing = (a, b) => { const y = Math.sin((b[0] - a[0]) * RAD) * Math.cos(b[1] * RAD), x = Math.cos(a[1] * RAD) * Math.sin(b[1] * RAD) - Math.sin(a[1] * RAD) * Math.cos(b[1] * RAD) * Math.cos((b[0] - a[0]) * RAD); return (Math.atan2(y, x) / RAD + 360) % 360; };
-const LOCAL = 1 << 20;
+const LOCAL = 1 << 19;
 
 class Heap { // min-heap of [cost, key]
   constructor() { this.k = []; this.v = []; }
