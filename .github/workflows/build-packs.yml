@@ -9,8 +9,8 @@ on:
   workflow_dispatch:
     inputs:
       packs:
-        description: "Which packs to build (comma separated: map,terrain,satellite,poi,satellite-nw,satellite-ne,satellite-sw,satellite-se)"
-        default: "map,terrain,poi"
+        description: "Which packs to build (comma separated: map,terrain,satellite,poi,routing,satellite-nw,satellite-ne,satellite-sw,satellite-se)"
+        default: "map,terrain,poi,routing"
       map_maxzoom:
         description: "Street map max zoom (15 = full detail, 14 = about half the size)"
         default: "15"
@@ -24,7 +24,7 @@ permissions:
 env:
   BBOX: "34.4,16.2,55.8,32.3"
   # Monthly: fresh OpenStreetMap data. Satellite imagery changes yearly — build it on demand only.
-  PACKS: ${{ github.event.inputs.packs || 'map,terrain,poi' }}
+  PACKS: ${{ github.event.inputs.packs || 'map,terrain,poi,routing' }}
   MAP_MAXZOOM: ${{ github.event.inputs.map_maxzoom || '15' }}
   RASTER_MAXZOOM: ${{ github.event.inputs.raster_maxzoom || '10' }}
 
@@ -40,6 +40,7 @@ jobs:
           - { kind: map }
           - { kind: terrain }
           - { kind: poi }
+          - { kind: routing }
           - { kind: satellite }
           # Whole-KSA imagery at zoom 13 (~17 m/px, close to Sentinel-2's native 10 m), split in four
           # regions so each file stays under GitHub's 2 GB release limit.
@@ -96,11 +97,21 @@ jobs:
         if: steps.want.outputs.go == '1' && matrix.kind == 'poi'
         run: python scripts/build_poi_pack.py ksa-poi.json
 
+      # ---- road directions: a compact road graph from OpenStreetMap (Geofabrik GCC extract) ----
+      - name: Build road-routing pack
+        if: steps.want.outputs.go == '1' && matrix.kind == 'routing'
+        run: |
+          pip install osmium numpy
+          curl -sfL --retry 3 -o gcc.osm.pbf https://download.geofabrik.de/asia/gcc-states-latest.osm.pbf
+          ls -lh gcc.osm.pbf
+          python scripts/build_routing_pack.py gcc.osm.pbf ksa-routing.rrt --bbox "$BBOX"
+          rm gcc.osm.pbf
+
       - name: Publish release
         if: steps.want.outputs.go == '1'
         env: { GH_TOKEN: "${{ github.token }}" }
         run: |
-          f=$(ls ksa-${{ matrix.kind }}.pmtiles ksa-${{ matrix.kind }}.json 2>/dev/null | head -1)
+          f=$(ls ksa-${{ matrix.kind }}.pmtiles ksa-${{ matrix.kind }}.json ksa-${{ matrix.kind }}.rrt 2>/dev/null | head -1)
           size=$(stat -c%s "$f"); ls -lh "$f"
           if [ "$size" -gt 2000000000 ]; then echo "::error::$f is over 2 GB (GitHub limit). Lower the zoom."; exit 1; fi
           tag="pack-${{ matrix.kind }}-${{ steps.want.outputs.date }}"
