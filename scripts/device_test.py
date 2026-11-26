@@ -4,7 +4,7 @@ Runs on the CI host while the emulator is up. Drives the app through Chrome DevT
 (the app's Android WebView), uses real internet services (EOX imagery, AWS terrain, GitHub releases),
 and writes results + screenshots to ./results.
 """
-import json, os, re, subprocess, sys, threading, time, traceback
+import sys, json, os, re, subprocess, sys, threading, time, traceback
 import urllib.request
 import websocket  # pip install websocket-client
 
@@ -169,6 +169,21 @@ if True:
         rec = ev("window.__rimal.state.rec.active")
         ok = bool(info and info.get('versionCode') and info.get('certSha256')) and upd is not None
         return (ok, {'appInfo': info, 'voice': voice, 'update': upd, 'recordingOnStart': rec})
+
+    @step('Downloads work on this Android version (manual PDF, app APK, places pack) — the Android 10 bug')
+    def _():
+        r = ev("""(async()=>{ const n = window.__rimal.native; const out = {};
+          for (const [k, url, name] of [['manual','https://github.com/ScorpTiger/rimal/releases/download/app-latest/Rimal-User-Manual.pdf','m.pdf'],['apk','https://github.com/ScorpTiger/rimal/releases/download/app-latest/Rimal-OffRoad.apk','a.apk']]) {
+            try { let last = 0; const p = await n.download(url, name, (f) => { last = f; }); out[k] = {ok: true, path: p, progress: Math.round(last * 100)}; } catch (e) { out[k] = {ok: false, err: String(e.message || e)}; } }
+          return out; })()""")
+        ok = r and all(v.get('ok') for v in r.values())
+        return (ok, r)
+
+    if os.environ.get('QUICK') == 'yes':
+        print('QUICK run — stopping after the download checks', flush=True)
+        json.dump(results, open(f'{OUT}/results.json', 'w'), indent=1)
+        gps_on['run'] = False
+        sys.exit(0 if all(x['ok'] for x in results) else 1)
 
     @step('Pitch & roll: level at start, then real accelerometer tilts (emulator sensor)')
     def _():

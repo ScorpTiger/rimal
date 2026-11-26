@@ -5,6 +5,13 @@ name: Device test (Android emulator)
 # logs) are pushed to the "test-results" branch.
 on:
   workflow_dispatch:
+    inputs:
+      api:
+        description: Android API level (29 = Android 10, like the car screen)
+        default: '34'
+      quick:
+        description: Quick run — start-up, native helpers and downloads only
+        default: 'no'
 
 permissions:
   contents: write
@@ -47,14 +54,14 @@ jobs:
       - name: Run on emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 34
+          api-level: ${{ inputs.api || 34 }}
           target: google_apis
           arch: x86_64
           ram-size: 4096M
           disk-size: 12G
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: python3 scripts/device_test.py
+          script: QUICK=${{ inputs.quick || 'no' }} python3 scripts/device_test.py
 
       - name: Publish results to the test-results branch
         if: always()
@@ -62,6 +69,6 @@ jobs:
           mkdir -p results && cd results
           git init -q -b test-results
           git config user.name "rimal-ci"; git config user.email "rimal-ci@users.noreply.github.com"
-          echo "Run ${{ github.run_id }} on ${{ github.sha }}" > RUN.txt
+          echo "Run ${{ github.run_id }} on ${{ github.sha }} (API ${{ inputs.api || 34 }}, quick ${{ inputs.quick || 'no' }})" > RUN.txt
           git add -A && git commit -q -m "Device test run ${{ github.run_id }}"
           git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" test-results
