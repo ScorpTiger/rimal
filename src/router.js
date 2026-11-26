@@ -84,7 +84,9 @@ export class RoadRouter {
    * options.avoidTracks: don't use desert tracks.
    */
   async route(from, to, { avoidTracks = false, maxNodes = 2_500_000, onProgress } = {}) {
-    const [a, b] = await Promise.all([this.nearest(from[0], from[1]), this.nearest(to[0], to[1])]);
+    const [a, b0] = await Promise.all([this.nearest(from[0], from[1]), this.nearest(to[0], to[1])]);
+    // A target deep in the desert: drive to the closest road point, then straight off-road.
+    const b = b0 || (await this.nearest(to[0], to[1], 30000));
     if (!a || !b) return null;
     const speedOf = (cls, fl) => (avoidTracks && (fl & 2) ? 0.3 : this.speeds[cls]);
     // Start and destination on the same stretch of road: drive straight along it.
