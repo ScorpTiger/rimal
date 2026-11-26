@@ -1783,6 +1783,8 @@ const SERVICE_DEFAULTS = [
   ['AC service', 0, 24, ''],
 ].map(([name, km, months, note], i) => ({ id: 'svc' + i, name, km, months, note, lastKm: null, lastDate: null }));
 async function serviceSheet() {
+  const scroller = () => [$('sheetBody'), document.querySelector('.sheetBox')];
+  const keep = !$('sheet').hidden && $('sheetTitle').textContent === 'Service checklist' ? scroller().map((e) => e?.scrollTop || 0) : null;
   const d = (await store.get('kv', 'service')) || { odo: null, odoGps: null, items: SERVICE_DEFAULTS };
   const save = () => store.put('kv', d, 'service');
   const odoNow = d.odo != null ? Math.round(d.odo + (S.odometer - (d.odoGps ?? S.odometer)) / 1000) : null;
@@ -1797,14 +1799,19 @@ async function serviceSheet() {
     const over = kmLeft < 0 || msLeft < 0, soon = kmLeft < Math.max(1000, it.km * 0.1) || msLeft < MONTH;
     return { cls: over ? 'over' : soon ? 'soon' : 'ok', txt: parts.join(' · ') || 'done', score: over ? 0 : soon ? 1 : 2 };
   };
-  const items = [...d.items].sort((a, b) => status(a).score - status(b).score);
+  const mine = (S.serviceOrder || 'mine') === 'mine';
+  const items = mine ? d.items : [...d.items].sort((a, b) => status(a).score - status(b).score);
   const due = items.filter((it) => ['over', 'soon'].includes(status(it).cls)).length;
   openSheet('Service checklist', `
     <div class="grid2"><div class="field"><label>Car odometer now (km)</label><input type="number" id="svOdo" inputmode="numeric" value="${odoNow ?? ''}" placeholder="read it from the dashboard"></div>
     <div class="field"><label>&nbsp;</label><button class="btn" data-a="odo">Save odometer</button></div></div>
     <p class="note">${odoNow != null ? `Rimal adds the distance you drive with it, so this stays roughly right — correct it from the dashboard now and then.` : 'Enter the odometer once; Rimal keeps it up to date from your drives.'} ${due ? `<b style="color:#ffb020">${due} item${due > 1 ? 's' : ''} due.</b>` : ''} Intervals are typical for a Land Cruiser — set them from your service book.</p>
-    ${items.map((it) => { const s = status(it); return `<div class="row svc ${s.cls}"><div class="grow"><div class="title">${esc(it.name)}</div><div class="sub">${s.txt} · every ${[it.km ? it.km.toLocaleString() + ' km' : '', it.months ? it.months + ' months' : ''].filter(Boolean).join(' or ')}${it.lastDate ? ` · last ${new Date(it.lastDate).toLocaleDateString()}${it.lastKm != null ? ' at ' + it.lastKm.toLocaleString() + ' km' : ''}` : ''}${it.note ? ' · ' + esc(it.note) : ''}</div></div><button class="btn sm" data-a="done" data-id="${it.id}">✓ Done</button><button class="btn sm" data-a="edit" data-id="${it.id}">✎</button></div>`; }).join('')}
+    <div class="field"><label>Order</label><div class="seg"><button data-a="ord" data-id="mine" class="${mine ? 'on' : ''}">My order</button><button data-a="ord" data-id="urgent" class="${mine ? '' : 'on'}">Most urgent first</button></div></div>
+    ${items.map((it, idx) => { const s = status(it); return `<div class="row svc ${s.cls}">${mine ? `<div class="mv"><button class="btn sm" data-a="up" data-id="${it.id}" ${idx === 0 ? 'disabled' : ''} aria-label="Move up">▲</button><button class="btn sm" data-a="down" data-id="${it.id}" ${idx === items.length - 1 ? 'disabled' : ''} aria-label="Move down">▼</button></div>` : ''}<div class="grow"><div class="title">${esc(it.name)}</div><div class="sub">${s.txt} · every ${[it.km ? it.km.toLocaleString() + ' km' : '', it.months ? it.months + ' months' : ''].filter(Boolean).join(' or ')}${it.lastDate ? ` · last ${new Date(it.lastDate).toLocaleDateString()}${it.lastKm != null ? ' at ' + it.lastKm.toLocaleString() + ' km' : ''}` : ''}${it.note ? ' · ' + esc(it.note) : ''}</div></div><button class="btn sm" data-a="done" data-id="${it.id}">✓ Done</button><button class="btn sm" data-a="edit" data-id="${it.id}">✎</button></div>`; }).join('')}
     <div class="btns" style="margin-top:12px"><button class="btn" data-a="add">+ Add item</button></div>`, {
+    ord: (v) => { setS('serviceOrder', v); serviceSheet(); },
+    up: async (id) => { const i = d.items.findIndex((x) => x.id === id); if (i > 0) { [d.items[i - 1], d.items[i]] = [d.items[i], d.items[i - 1]]; await save(); } serviceSheet(); },
+    down: async (id) => { const i = d.items.findIndex((x) => x.id === id); if (i >= 0 && i < d.items.length - 1) { [d.items[i + 1], d.items[i]] = [d.items[i], d.items[i + 1]]; await save(); } serviceSheet(); },
     odo: async () => { const v = +$('svOdo').value; if (!v) return toast('Enter the odometer reading'); d.odo = v; d.odoGps = S.odometer; await save(); toast('Odometer saved'); serviceSheet(); },
     done: async (id) => { const it = d.items.find((x) => x.id === id); it.lastDate = Date.now(); it.lastKm = odoNow; await save(); act.log('data', `service done: ${it.name}`, { km: odoNow }); toast(`${it.name} — recorded${odoNow == null ? ' (enter the odometer to track km too)' : ''}`); serviceSheet(); },
     edit: async (id) => {
@@ -1817,6 +1824,7 @@ async function serviceSheet() {
     },
     add: async () => { const t = await prompt('Add service item', 'Name', ''); if (t) { d.items.push({ id: 'my' + store.uid(), name: t, km: 10000, months: 12, note: '', lastKm: null, lastDate: null }); await save(); } serviceSheet(); },
   });
+  if (keep) scroller().forEach((e, k) => { if (e) e.scrollTop = keep[k]; });
 }
 
 /* ---------- v4: Saudi-only map packs ---------- */
